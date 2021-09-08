@@ -16,6 +16,8 @@ type dockerExecutor struct {
 }
 
 var ErrorDockerExecutorNetworkExist = errors.New("error [docker_executor]: network already exist")
+var ErrorDockerExecutorNetworkNotExist = errors.New("error [docker_executor]: network does not exist")
+var ErrorDockerExecutorNetworkBeingUsed = errors.New("error [docker_executor]: network is being used")
 
 func NewDockerExecutor(
 	c domainService.Config,
@@ -109,6 +111,7 @@ func (d *dockerExecutor) Run(ctx context.Context, configs ...model.ServiceConfig
 
 func (d *dockerExecutor) Stop(ctx context.Context, configs ...model.ServiceConfig) error {
 	var serviceName []string
+	var networks []string
 
 	for _, config := range configs {
 		if config == nil {
@@ -124,12 +127,16 @@ func (d *dockerExecutor) Stop(ctx context.Context, configs ...model.ServiceConfi
 			return err
 		}
 		serviceName = append(serviceName, d.getContainerName(ctx, config))
+		networks = append(networks, config.Networks()...)
 	}
 	for _, containerName := range serviceName {
 		cmdRes, err := d.cmd.RunCommand(ctx, "docker", "stop", containerName)
 		if err != nil {
 			return errors.New(string(cmdRes))
 		}
+	}
+	for _, network := range networks {
+		_ = d.removeNetwork(ctx, network)
 	}
 	return nil
 }
@@ -204,12 +211,48 @@ func (d *dockerExecutor) addNetwork(ctx context.Context, networkName string) err
 	}
 	return nil
 }
+
+func (d *dockerExecutor) removeNetwork(ctx context.Context, networkName string) error {
+	if !d.isNetworkExist(ctx, networkName) {
+		return ErrorDockerExecutorNetworkNotExist
+	}
+
+	if isUsed, err := d.isNetworkUsed(ctx, networkName); err != nil || isUsed {
+		if err == nil {
+			err = ErrorDockerExecutorNetworkBeingUsed
+		}
+		return err
+	}
+
+	resCmd, err := d.cmd.RunCommand(ctx, "docker", "network", "rm", networkName)
+	if err != nil {
+		return errors.New(string(resCmd))
+	}
+	return nil
+}
+
 func (d *dockerExecutor) isNetworkExist(ctx context.Context, networkName string) bool {
 	_, err := d.cmd.RunCommand(ctx, "docker", "network", "inspect", networkName)
 	if err != nil {
 		return false
 	}
 	return true
+}
+
+func (d *dockerExecutor) isNetworkUsed(ctx context.Context, networkName string) (bool, error) {
+	cmdRes, err := d.cmd.RunCommand(ctx, "docker", "network", "inspect", networkName)
+	if err != nil {
+		return false, nil
+	}
+	var networks []*dto.DockerNetworkInspect
+	err = json.Unmarshal(cmdRes, &networks)
+	if err != nil {
+		return false, err
+	}
+	if len(networks) == 0 || len(networks[0].Containers) <= 0 {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (d *dockerExecutor) getContainerName(ctx context.Context, config model.ServiceConfig) string {

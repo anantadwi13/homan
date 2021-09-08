@@ -205,3 +205,39 @@ type DockerContainerInspect struct {
 		} `json:"Networks"`
 	} `json:"NetworkSettings"`
 }
+
+type DockerNetworkInspect struct {
+	Name       string    `json:"Name"`
+	Id         string    `json:"Id"`
+	Created    time.Time `json:"Created"`
+	Scope      string    `json:"Scope"`
+	Driver     string    `json:"Driver"`
+	EnableIPv6 bool      `json:"EnableIPv6"`
+	IPAM       struct {
+		Driver  string `json:"Driver"`
+		Options struct {
+		} `json:"Options"`
+		Config []struct {
+			Subnet  string `json:"Subnet"`
+			Gateway string `json:"Gateway"`
+		} `json:"Config"`
+	} `json:"IPAM"`
+	Internal   bool `json:"Internal"`
+	Attachable bool `json:"Attachable"`
+	Ingress    bool `json:"Ingress"`
+	ConfigFrom struct {
+		Network string `json:"Network"`
+	} `json:"ConfigFrom"`
+	ConfigOnly bool `json:"ConfigOnly"`
+	Containers map[string]struct {
+		Name        string `json:"Name"`
+		EndpointID  string `json:"EndpointID"`
+		MacAddress  string `json:"MacAddress"`
+		IPv4Address string `json:"IPv4Address"`
+		IPv6Address string `json:"IPv6Address"`
+	} `json:"Containers"`
+	Options struct {
+	} `json:"Options"`
+	Labels struct {
+	} `json:"Labels"`
+}
