@@ -32,11 +32,19 @@ func NewDockerExecutor(
 }
 
 func (d *dockerExecutor) RunAll(ctx context.Context) error {
-	all, err := d.registry.GetAll(ctx)
+	systemServices, err := d.registry.GetSystemServices(ctx)
 	if err != nil {
 		return err
 	}
-	err = d.Run(ctx, all...)
+	userServices, err := d.registry.GetUserServices(ctx)
+	if err != nil {
+		return err
+	}
+	err = d.Run(ctx, systemServices...)
+	if err != nil {
+		return err
+	}
+	err = d.Run(ctx, userServices...)
 	if err != nil {
 		return err
 	}
