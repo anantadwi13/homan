@@ -17,16 +17,18 @@ type Config interface {
 	// TempPath contains full path
 	TempPath() string
 
+	ProjectName() string
 	ServiceRegistryConfPath() string
 	SystemNamePrefix() string
 }
 
 type ConfigParams struct {
-	BasePath                string // BasePath directory of project, default "$(pwd)/."
+	BasePath                string // BasePath directory of project, default "$(pwd)/.homan"
 	ConfigPath              string // ConfigPath relative to BasePath, default "/config"
 	DataPath                string // DataPath relative to BasePath, default "/data"
 	CustomPath              string // CustomPath relative to BasePath, default "/custom"
 	TempPath                string // TempPath relative to BasePath, default "/temp"
+	ProjectName             string // ServiceRegistryConfName relative to ConfigPath, default "homan"
 	ServiceRegistryConfName string // ServiceRegistryConfName relative to ConfigPath, default "registry"
 	SystemNamePrefix        string // default "system-"
 }
@@ -37,6 +39,7 @@ type config struct {
 	customPath              string
 	dataPath                string
 	tempPath                string
+	projectName             string
 	serviceRegistryConfPath string
 	systemNamePrefix        string
 }
@@ -51,21 +54,21 @@ func NewConfig(params ConfigParams) (Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		c.basePath = dir
+		c.basePath = filepath.Join(dir, "/.homan")
 	}
 
 	joinPath := func(first, second, defaultSecond string) string {
 		if second != "" {
-			return filepath.Join(params.BasePath, second)
+			return filepath.Join(first, second)
 		} else {
-			return filepath.Join(params.BasePath, defaultSecond)
+			return filepath.Join(first, defaultSecond)
 		}
 	}
 	checkEmpty := func(value, defaultValue string) string {
 		if value != "" {
-			return filepath.Join(params.BasePath, value)
+			return value
 		} else {
-			return filepath.Join(params.BasePath, defaultValue)
+			return defaultValue
 		}
 	}
 
@@ -73,6 +76,7 @@ func NewConfig(params ConfigParams) (Config, error) {
 	c.customPath = joinPath(c.basePath, params.CustomPath, "/custom")
 	c.dataPath = joinPath(c.basePath, params.DataPath, "/data")
 	c.tempPath = joinPath(c.basePath, params.TempPath, "/temp")
+	c.projectName = checkEmpty(params.ProjectName, "homan")
 	c.serviceRegistryConfPath = joinPath(c.configPath, params.ServiceRegistryConfName, "registry")
 	c.systemNamePrefix = checkEmpty(params.SystemNamePrefix, "system-")
 
@@ -97,6 +101,10 @@ func (c *config) DataPath() string {
 
 func (c *config) TempPath() string {
 	return c.tempPath
+}
+
+func (c *config) ProjectName() string {
+	return c.projectName
 }
 
 func (c *config) ServiceRegistryConfPath() string {

@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	RegistryErrorServiceConfigInvalid = errors.New("error [registry]: service config is invalid")
-	RegistryErrorServiceConfigExist   = errors.New("error [registry]: service config already exists")
+	ErrorRegistryServiceConfigInvalid  = errors.New("error [registry]: service config is invalid")
+	ErrorRegistryServiceConfigExist    = errors.New("error [registry]: service config already exists")
+	ErrorRegistryServiceConfigNotFound = errors.New("error [registry]: service config is not found")
 )
 
 type Registry interface {

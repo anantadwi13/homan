@@ -2,9 +2,9 @@ package service
 
 import (
 	"context"
-	"github.com/anantadwi13/cli-whm/internal/adapter/service/dto"
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	domainService "github.com/anantadwi13/cli-whm/internal/domain/service"
+	"github.com/anantadwi13/cli-whm/internal/external/service/dto"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,15 +23,10 @@ func (s *scp) Marshal(ctx context.Context, configs ...model.ServiceConfig) ([]by
 		Version: "3.9",
 	}
 
-	isSystem := false
 	networkNames := make(map[string]interface{})
 	for _, config := range configs {
 		if config.IsCustom() {
 			continue
-		}
-
-		if checkSystem, err := s.registry.IsSystem(ctx, config); checkSystem && err != nil {
-			isSystem = true
 		}
 		for _, networkName := range config.Networks() {
 			networkNames[networkName] = nil
@@ -46,7 +41,7 @@ func (s *scp) Marshal(ctx context.Context, configs ...model.ServiceConfig) ([]by
 	for networkName := range networkNames {
 		compose.Networks[networkName] = &dto.Network{
 			Name:     networkName,
-			External: !isSystem,
+			External: true,
 		}
 	}
 

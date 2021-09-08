@@ -32,13 +32,13 @@ type sc struct {
 	ports        []Port
 	volBindings  []Volume
 	networks     []string
-	scope        ServiceType
+	serviceType  ServiceType
 	isCustom     bool
 }
 
 func NewServiceConfig(
 	name string, domainName string, image string, environments []string, portBindings []Port, volBindings []Volume,
-	networks []string, scope ServiceType,
+	networks []string, serviceType ServiceType,
 ) ServiceConfig {
 	return &sc{
 		image:        image,
@@ -49,18 +49,18 @@ func NewServiceConfig(
 		volBindings:  volBindings,
 		networks:     networks,
 		isCustom:     false,
-		scope:        scope,
+		serviceType:  serviceType,
 	}
 }
 
 func NewCustomServiceConfig(name string, domainName string, filePath string, portBindings []Port) ServiceConfig {
 	return &sc{
-		name:       name,
-		file:       filepath.Clean(filePath),
-		domainName: domainName,
-		ports:      portBindings,
-		isCustom:   true,
-		scope:      TypeWeb,
+		name:        name,
+		file:        filepath.Clean(filePath),
+		domainName:  domainName,
+		ports:       portBindings,
+		isCustom:    true,
+		serviceType: TypeWeb,
 	}
 }
 
@@ -97,7 +97,7 @@ func (s *sc) Networks() []string {
 }
 
 func (s *sc) Type() ServiceType {
-	return s.scope
+	return s.serviceType
 }
 
 func (s *sc) IsCustom() bool {
