@@ -17,6 +17,8 @@ type Registry interface {
 	GetSystemServices(ctx context.Context) ([]model.ServiceConfig, error)
 	GetUserServices(ctx context.Context) ([]model.ServiceConfig, error)
 	Add(ctx context.Context, config model.ServiceConfig) error
+	AddSystem(ctx context.Context, config model.ServiceConfig) error
 	Remove(ctx context.Context, config model.ServiceConfig) error
+	RemoveSystem(ctx context.Context, config model.ServiceConfig) error
 	IsSystem(ctx context.Context, config model.ServiceConfig) (bool, error)
 }

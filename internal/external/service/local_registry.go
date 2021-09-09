@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"github.com/anantadwi13/cli-whm/internal/domain"
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	domainService "github.com/anantadwi13/cli-whm/internal/domain/service"
 	"github.com/anantadwi13/cli-whm/internal/external/service/dto"
@@ -10,12 +11,12 @@ import (
 )
 
 type localRegistry struct {
-	config  domainService.Config
+	config  domain.Config
 	storage domainService.Storage
 }
 
 func NewLocalRegistry(
-	config domainService.Config, storage domainService.Storage,
+	config domain.Config, storage domainService.Storage,
 ) domainService.Registry {
 	return &localRegistry{
 		config:  config,
@@ -81,6 +82,25 @@ func (i *localRegistry) Add(ctx context.Context, sc model.ServiceConfig) error {
 	return nil
 }
 
+func (i *localRegistry) AddSystem(ctx context.Context, sc model.ServiceConfig) error {
+	if sc == nil || !sc.IsValid() {
+		return domainService.ErrorRegistryServiceConfigInvalid
+	}
+	system, user, err := i.readFromFile(ctx)
+	if err != nil {
+		return err
+	}
+	if s, ok := system[sc.Name()]; ok && s != nil {
+		return domainService.ErrorRegistryServiceConfigExist
+	}
+	system[sc.Name()] = sc
+	err = i.writeToFile(ctx, system, user)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (i *localRegistry) Remove(ctx context.Context, sc model.ServiceConfig) error {
 	if sc == nil || !sc.IsValid() {
 		return domainService.ErrorRegistryServiceConfigInvalid
@@ -93,6 +113,25 @@ func (i *localRegistry) Remove(ctx context.Context, sc model.ServiceConfig) erro
 		return domainService.ErrorRegistryServiceConfigNotFound
 	}
 	delete(user, sc.Name())
+	err = i.writeToFile(ctx, system, user)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (i *localRegistry) RemoveSystem(ctx context.Context, sc model.ServiceConfig) error {
+	if sc == nil || !sc.IsValid() {
+		return domainService.ErrorRegistryServiceConfigInvalid
+	}
+	system, user, err := i.readFromFile(ctx)
+	if err != nil {
+		return err
+	}
+	if s, ok := system[sc.Name()]; !ok || s == nil {
+		return domainService.ErrorRegistryServiceConfigNotFound
+	}
+	delete(system, sc.Name())
 	err = i.writeToFile(ctx, system, user)
 	if err != nil {
 		return err

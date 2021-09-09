@@ -5,7 +5,10 @@ import "path/filepath"
 type ServiceType string
 
 const (
-	TypeWeb = ServiceType("website")
+	TypeWeb     = ServiceType("website")
+	TypeProxy   = ServiceType("proxy")
+	TypeDNS     = ServiceType("dns")
+	TypeCertMan = ServiceType("certman")
 )
 
 type ServiceConfig interface {

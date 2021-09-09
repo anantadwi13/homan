@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"errors"
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	"strconv"
 	"strings"
@@ -37,7 +38,15 @@ func MapExternalToServiceConfig(name string, svc *Service) (model.ServiceConfig,
 	)
 
 	for _, port := range svc.Ports {
-		p := strings.SplitN(port, ":", 2)
+		portProto := strings.SplitN(port, "/", 2)
+		if len(portProto) < 1 || len(portProto) > 2 {
+			return nil, errors.New("error [MapExternalToServiceConfig]: invalid port and protocol")
+		}
+		proto := ""
+		if len(portProto) == 2 {
+			proto = portProto[1]
+		}
+		p := strings.SplitN(portProto[0], ":", 2)
 		var pInt []int
 		for _, v := range p {
 			vInt, err := strconv.Atoi(v)
@@ -48,7 +57,14 @@ func MapExternalToServiceConfig(name string, svc *Service) (model.ServiceConfig,
 		}
 		switch len(pInt) {
 		case 2:
-			ports = append(ports, model.NewPortBinding(pInt[0], pInt[1]))
+			switch proto {
+			case string(model.ProtocolTCP):
+				ports = append(ports, model.NewPortBindingTCP(pInt[0], pInt[1]))
+			case string(model.ProtocolUDP):
+				ports = append(ports, model.NewPortBindingUDP(pInt[0], pInt[1]))
+			default:
+				ports = append(ports, model.NewPortBinding(pInt[0], pInt[1]))
+			}
 		case 1:
 			ports = append(ports, model.NewPort(pInt[0]))
 		}

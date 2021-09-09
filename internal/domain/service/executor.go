@@ -13,7 +13,6 @@ var (
 )
 
 type Executor interface {
-	RunAll(ctx context.Context) error
 	Run(ctx context.Context, configs ...model.ServiceConfig) error
 	Stop(ctx context.Context, configs ...model.ServiceConfig) error
 	Restart(ctx context.Context, configs ...model.ServiceConfig) error

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/anantadwi13/cli-whm/internal/domain"
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	"github.com/anantadwi13/cli-whm/internal/domain/service"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +17,7 @@ var (
 
 func init() {
 	cmd = NewCommander()
-	c, err := service.NewConfig(service.ConfigParams{
+	c, err := domain.NewConfig(domain.ConfigParams{
 		BasePath: "../../../temp",
 	})
 
@@ -60,15 +61,6 @@ func TestDockerExecutor(t *testing.T) {
 
 	err = r.Add(context.TODO(), sc)
 	assert.Nil(t, err)
-
-	err = de.RunAll(context.TODO())
-	assert.Nil(t, err)
-
-	err = de.Stop(context.TODO(), sc)
-	assert.Nil(t, err)
-	isRunning, err = de.IsRunning(context.TODO(), sc)
-	assert.Nil(t, err)
-	assert.Equal(t, false, isRunning)
 
 	err = r.Remove(context.TODO(), sc)
 	assert.Nil(t, err)

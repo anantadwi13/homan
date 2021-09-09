@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/anantadwi13/cli-whm/internal/domain"
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	domainService "github.com/anantadwi13/cli-whm/internal/domain/service"
 	"github.com/anantadwi13/cli-whm/internal/external/service/dto"
 )
 
 type dockerExecutor struct {
-	c        domainService.Config
+	c        domain.Config
 	cmd      Commander
 	registry domainService.Registry
 }
@@ -20,7 +21,7 @@ var ErrorDockerExecutorNetworkNotExist = errors.New("error [docker_executor]: ne
 var ErrorDockerExecutorNetworkBeingUsed = errors.New("error [docker_executor]: network is being used")
 
 func NewDockerExecutor(
-	c domainService.Config,
+	c domain.Config,
 	cmd Commander,
 	registry domainService.Registry,
 ) domainService.Executor {
@@ -29,26 +30,6 @@ func NewDockerExecutor(
 		cmd:      cmd,
 		registry: registry,
 	}
-}
-
-func (d *dockerExecutor) RunAll(ctx context.Context) error {
-	systemServices, err := d.registry.GetSystemServices(ctx)
-	if err != nil {
-		return err
-	}
-	userServices, err := d.registry.GetUserServices(ctx)
-	if err != nil {
-		return err
-	}
-	err = d.Run(ctx, systemServices...)
-	if err != nil {
-		return err
-	}
-	err = d.Run(ctx, userServices...)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (d *dockerExecutor) Run(ctx context.Context, configs ...model.ServiceConfig) error {
