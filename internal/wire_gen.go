@@ -9,8 +9,8 @@ package internal
 import (
 	"github.com/anantadwi13/cli-whm/internal/domain"
 	"github.com/anantadwi13/cli-whm/internal/domain/service"
+	"github.com/anantadwi13/cli-whm/internal/domain/usecase"
 	service2 "github.com/anantadwi13/cli-whm/internal/external/service"
-	"github.com/anantadwi13/cli-whm/internal/usecase"
 	"github.com/google/wire"
 )
 
