@@ -27,7 +27,7 @@ func MapServiceConfigToExternal(config model.ServiceConfig) (*Service, error) {
 		Ports:       ports,
 		Networks:    config.Networks(),
 		Volumes:     volumes,
-		Type:        string(config.Type()),
+		Tag:         string(config.Tag()),
 	}, nil
 }
 
@@ -89,6 +89,6 @@ func MapExternalToServiceConfig(name string, svc *Service) (model.ServiceConfig,
 		ports,
 		volumeBindings,
 		svc.Networks,
-		model.ServiceType(svc.Type),
+		model.ServiceTag(svc.Tag),
 	), nil
 }

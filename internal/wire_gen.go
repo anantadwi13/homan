@@ -24,10 +24,12 @@ func NewApp(config domain.Config) App {
 	executor := service2.NewDockerExecutor(config, commander, registry)
 	ucUp := usecase.NewUcUp(registry, executor)
 	ucDown := usecase.NewUcDown(registry, executor)
+	ucAdd := usecase.NewUcAdd(config, registry, executor)
 	internalUseCases := useCases{
 		Init: ucInit,
 		Up:   ucUp,
 		Down: ucDown,
+		Add:  ucAdd,
 	}
 	app := App{
 		UseCases: internalUseCases,
@@ -37,9 +39,9 @@ func NewApp(config domain.Config) App {
 
 // app.go:
 
-var useCasesSet = wire.NewSet(usecase.NewUcInit, usecase.NewUcUp, usecase.NewUcDown, wire.Struct(new(useCases), "Init", "Up", "Down"))
+var useCasesSet = wire.NewSet(usecase.NewUcInit, usecase.NewUcUp, usecase.NewUcDown, usecase.NewUcAdd, wire.Struct(new(useCases), "Init", "Up", "Down", "Add"))
 
-var serviceSet = wire.NewSet(service2.NewCommander, service2.NewLocalRegistry, service2.NewDockerExecutor, service.NewStorage, wire.Struct(new(services), "Commander", "Executor", "Registry", "Storage"))
+var serviceSet = wire.NewSet(service2.NewCommander, service2.NewLocalRegistry, service2.NewDockerExecutor, service.NewStorage, service2.NewDockerProxy, wire.Struct(new(services), "Commander", "Executor", "Registry", "Storage", "Proxy"))
 
 var applicationSet = wire.NewSet(
 	useCasesSet, wire.Struct(new(App), "UseCases"),
@@ -49,6 +51,7 @@ type useCases struct {
 	Init usecase.UcInit
 	Up   usecase.UcUp
 	Down usecase.UcDown
+	Add  usecase.UcAdd
 }
 
 type services struct {
@@ -56,6 +59,7 @@ type services struct {
 	Executor  service.Executor
 	Registry  service.Registry
 	Storage   service.Storage
+	Proxy     service.Proxy
 }
 
 type App struct {

@@ -9,7 +9,7 @@ type UcUpParams struct {
 }
 
 type UcUp interface {
-	Execute(ctx context.Context, params *UcUpParams) error
+	Execute(ctx context.Context, params *UcUpParams) Error
 }
 
 type ucUp struct {
@@ -21,27 +21,27 @@ func NewUcUp(registry service.Registry, executor service.Executor) UcUp {
 	return &ucUp{registry, executor}
 }
 
-func (u *ucUp) Execute(ctx context.Context, params *UcUpParams) error {
+func (u *ucUp) Execute(ctx context.Context, params *UcUpParams) Error {
 	systemServices, err := u.registry.GetSystemServices(ctx)
 	if err != nil {
-		return err
+		return WrapErrorSystem(err)
 	}
 	userServices, err := u.registry.GetUserServices(ctx)
 	if err != nil {
-		return err
+		return WrapErrorSystem(err)
 	}
 
 	for _, systemService := range systemServices {
 		err = u.executor.Run(ctx, systemService)
 		if err != nil && err != service.ErrorExecutorServiceIsRunning {
-			return err
+			return WrapErrorSystem(err)
 		}
 	}
 
 	for _, userService := range userServices {
 		err = u.executor.Run(ctx, userService)
 		if err != nil && err != service.ErrorExecutorServiceIsRunning {
-			return err
+			return WrapErrorSystem(err)
 		}
 	}
 

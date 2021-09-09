@@ -11,7 +11,7 @@ type Service struct {
 	Ports       []string    `yaml:"ports" json:"ports,omitempty"`
 	Networks    []string    `yaml:"networks" json:"networks,omitempty"`
 	Volumes     []string    `yaml:"volumes" json:"volumes,omitempty"`
-	Type        string      `yaml:"-" json:"type,omitempty"`
+	Tag         string      `yaml:"-" json:"type,omitempty"`
 }
 
 type Network struct {

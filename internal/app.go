@@ -15,7 +15,8 @@ var useCasesSet = wire.NewSet(
 	usecase.NewUcInit,
 	usecase.NewUcUp,
 	usecase.NewUcDown,
-	wire.Struct(new(useCases), "Init", "Up", "Down"),
+	usecase.NewUcAdd,
+	wire.Struct(new(useCases), "Init", "Up", "Down", "Add"),
 )
 
 var serviceSet = wire.NewSet(
@@ -23,7 +24,8 @@ var serviceSet = wire.NewSet(
 	externalService.NewLocalRegistry,
 	externalService.NewDockerExecutor,
 	domainService.NewStorage,
-	wire.Struct(new(services), "Commander", "Executor", "Registry", "Storage"),
+	externalService.NewDockerProxy,
+	wire.Struct(new(services), "Commander", "Executor", "Registry", "Storage", "Proxy"),
 )
 
 var applicationSet = wire.NewSet(
@@ -35,6 +37,7 @@ type useCases struct {
 	Init usecase.UcInit
 	Up   usecase.UcUp
 	Down usecase.UcDown
+	Add  usecase.UcAdd
 }
 
 type services struct {
@@ -42,6 +45,7 @@ type services struct {
 	Executor  domainService.Executor
 	Registry  domainService.Registry
 	Storage   domainService.Storage
+	Proxy     domainService.Proxy
 }
 
 type App struct {

@@ -15,6 +15,7 @@ var (
 type Registry interface {
 	GetAll(ctx context.Context) ([]model.ServiceConfig, error)
 	GetSystemServices(ctx context.Context) ([]model.ServiceConfig, error)
+	GetSystemServiceByTag(ctx context.Context, tag model.ServiceTag) ([]model.ServiceConfig, error)
 	GetUserServices(ctx context.Context) ([]model.ServiceConfig, error)
 	Add(ctx context.Context, config model.ServiceConfig) error
 	AddSystem(ctx context.Context, config model.ServiceConfig) error

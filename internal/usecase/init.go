@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"errors"
 	"github.com/anantadwi13/cli-whm/internal/domain"
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	"github.com/anantadwi13/cli-whm/internal/domain/service"
@@ -13,12 +12,12 @@ type UcInitParams struct {
 }
 
 type UcInit interface {
-	Execute(ctx context.Context, params *UcInitParams) error
+	Execute(ctx context.Context, params *UcInitParams) Error
 }
 
 var (
-	ErrorUcInitAlreadyInitialized   = errors.New("error [init]: project is already initialized")
-	ErrorUcInitServiceConfigInvalid = errors.New("error [init]: service config is invalid")
+	ErrorUcInitAlreadyInitialized   = NewErrorUser("project is already initialized")
+	ErrorUcInitServiceConfigInvalid = NewErrorUser("service config is invalid")
 )
 
 type ucInit struct {
@@ -31,10 +30,10 @@ func NewUcInit(registry service.Registry, config domain.Config, storage service.
 	return &ucInit{registry, config, storage}
 }
 
-func (u *ucInit) Execute(ctx context.Context, params *UcInitParams) error {
+func (u *ucInit) Execute(ctx context.Context, params *UcInitParams) Error {
 	services, err := u.registry.GetSystemServices(ctx)
 	if err != nil {
-		return err
+		return WrapErrorSystem(err)
 	}
 	if len(services) > 0 {
 		return ErrorUcInitAlreadyInitialized
@@ -48,7 +47,7 @@ func (u *ucInit) Execute(ctx context.Context, params *UcInitParams) error {
 	for _, serviceConfig := range services {
 		err := u.registry.AddSystem(ctx, serviceConfig)
 		if err != nil {
-			return err
+			return WrapErrorSystem(err)
 		}
 	}
 	return nil
@@ -70,7 +69,7 @@ func (u *ucInit) systemServices() []model.ServiceConfig {
 				model.NewVolumeBinding(u.filePathJoin("/haproxy"), "/etc/haproxy"),
 			},
 			[]string{u.config.ProjectName()},
-			model.TypeProxy,
+			model.TagGateway,
 		),
 		model.NewServiceConfig(
 			"dns",
@@ -86,7 +85,7 @@ func (u *ucInit) systemServices() []model.ServiceConfig {
 				model.NewVolumeBinding(u.filePathJoin("/dns/data"), "/data"),
 			},
 			[]string{u.config.ProjectName()},
-			model.TypeDNS,
+			model.TagDNS,
 		),
 		model.NewServiceConfig(
 			"certman",
@@ -101,7 +100,7 @@ func (u *ucInit) systemServices() []model.ServiceConfig {
 				model.NewVolumeBinding(u.filePathJoin("/certman/etc/letsencrypt"), "/etc/letsencrypt"),
 			},
 			[]string{u.config.ProjectName()},
-			model.TypeCertMan,
+			model.TagCertMan,
 		),
 	}
 }

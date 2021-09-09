@@ -10,15 +10,15 @@ import (
 )
 
 var (
-	cmd Commander
-	de  service.Executor
-	r   service.Registry
+	r  service.Registry
+	de service.Executor
 )
 
 func init() {
-	cmd = NewCommander()
+	cmd := NewCommander()
 	c, err := domain.NewConfig(domain.ConfigParams{
-		BasePath: "../../../temp",
+		BasePath:    "../../../temp",
+		ProjectName: "test-project",
 	})
 
 	if err != nil {
@@ -38,7 +38,7 @@ func TestDockerExecutor(t *testing.T) {
 		[]model.Port{model.NewPortBinding(8081, 80)},
 		nil,
 		[]string{"test-network"},
-		model.TypeWeb,
+		model.TagWeb,
 	)
 
 	err := de.Run(context.TODO(), sc)

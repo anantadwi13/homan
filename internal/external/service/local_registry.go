@@ -51,6 +51,22 @@ func (i *localRegistry) GetSystemServices(ctx context.Context) ([]model.ServiceC
 	return services, nil
 }
 
+func (i *localRegistry) GetSystemServiceByTag(ctx context.Context, tag model.ServiceTag) (
+	[]model.ServiceConfig, error,
+) {
+	system, _, err := i.readFromFile(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var services []model.ServiceConfig
+	for _, serviceConfig := range system {
+		if serviceConfig.Tag() == tag {
+			services = append(services, serviceConfig)
+		}
+	}
+	return services, nil
+}
+
 func (i *localRegistry) GetUserServices(ctx context.Context) ([]model.ServiceConfig, error) {
 	_, user, err := i.readFromFile(ctx)
 	if err != nil {

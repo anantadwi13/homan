@@ -2,13 +2,14 @@ package model
 
 import "path/filepath"
 
-type ServiceType string
+type ServiceTag string
 
 const (
-	TypeWeb     = ServiceType("website")
-	TypeProxy   = ServiceType("proxy")
-	TypeDNS     = ServiceType("dns")
-	TypeCertMan = ServiceType("certman")
+	TagWeb     = ServiceTag("website")
+	TagGateway = ServiceTag("gateway")
+	TagProxy   = ServiceTag("proxy")
+	TagDNS     = ServiceTag("dns")
+	TagCertMan = ServiceTag("certman")
 )
 
 type ServiceConfig interface {
@@ -20,7 +21,7 @@ type ServiceConfig interface {
 	PortBindings() []Port
 	VolumeBindings() []Volume
 	Networks() []string
-	Type() ServiceType
+	Tag() ServiceTag
 
 	IsCustom() bool
 	Validator
@@ -35,13 +36,13 @@ type sc struct {
 	ports        []Port
 	volBindings  []Volume
 	networks     []string
-	serviceType  ServiceType
+	serviceTag   ServiceTag
 	isCustom     bool
 }
 
 func NewServiceConfig(
 	name string, domainName string, image string, environments []string, portBindings []Port, volBindings []Volume,
-	networks []string, serviceType ServiceType,
+	networks []string, serviceType ServiceTag,
 ) ServiceConfig {
 	return &sc{
 		image:        image,
@@ -52,18 +53,18 @@ func NewServiceConfig(
 		volBindings:  volBindings,
 		networks:     networks,
 		isCustom:     false,
-		serviceType:  serviceType,
+		serviceTag:   serviceType,
 	}
 }
 
 func NewCustomServiceConfig(name string, domainName string, filePath string, portBindings []Port) ServiceConfig {
 	return &sc{
-		name:        name,
-		file:        filepath.Clean(filePath),
-		domainName:  domainName,
-		ports:       portBindings,
-		isCustom:    true,
-		serviceType: TypeWeb,
+		name:       name,
+		file:       filepath.Clean(filePath),
+		domainName: domainName,
+		ports:      portBindings,
+		isCustom:   true,
+		serviceTag: TagWeb,
 	}
 }
 
@@ -99,8 +100,8 @@ func (s *sc) Networks() []string {
 	return s.networks
 }
 
-func (s *sc) Type() ServiceType {
-	return s.serviceType
+func (s *sc) Tag() ServiceTag {
+	return s.serviceTag
 }
 
 func (s *sc) IsCustom() bool {
