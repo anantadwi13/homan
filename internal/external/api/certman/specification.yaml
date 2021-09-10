@@ -1,0 +1,202 @@
+openapi: 3.0.3
+info:
+  title: Let's Encrypt Manager
+  description: Let's Encrypt Manager
+  version: 0.1.0
+servers:
+  - url: 'http://{hostname}:5555'
+    variables:
+      hostname:
+        default: localhost
+paths:
+  /certificates:
+    get:
+      summary: Get all certificates
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/certificate-res"
+        default:
+          $ref: "#/components/responses/default-error"
+    post:
+      summary: Create certificate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/certificate-req"
+      responses:
+        201:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/certificate-res"
+        400:
+          $ref: "#/components/responses/bad-request"
+        default:
+          $ref: "#/components/responses/default-error"
+    put:
+      summary: Renew all certificates
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/general-res"
+        default:
+          $ref: "#/components/responses/default-error"
+  /certificates/{domain}:
+    get:
+      summary: Get certificate by domain name
+      parameters:
+        - name: domain
+          in: path
+          description: Domain name
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/certificate-res"
+        404:
+          $ref: '#/components/responses/not-found'
+        default:
+          $ref: '#/components/responses/default-error'
+    put:
+      summary: Renew certificate for selected domain
+      parameters:
+        - name: domain
+          in: path
+          description: Domain name
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/general-res"
+        404:
+          $ref: "#/components/responses/not-found"
+        default:
+          $ref: "#/components/responses/default-error"
+    delete:
+      summary: Delete certificate
+      parameters:
+        - name: domain
+          in: path
+          description: Domain name
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/general-res"
+        404:
+          $ref: '#/components/responses/not-found'
+        default:
+          $ref: '#/components/responses/default-error'
+components:
+  schemas:
+    certificate-req:
+      type: object
+      required: [ email,domain ]
+      properties:
+        email:
+          type: string
+          description: Email address
+          example: admin@example.com
+        domain:
+          type: string
+          description: Domain
+          example: example.com
+        alt_domains:
+          type: array
+          items:
+            type: string
+          description: Alternative Domain
+          example: [ www.example.com, sub.example.com ]
+    certificate-res:
+      title: Certificate
+      type: object
+      required:
+        - name
+        - serial_number
+        - key_type
+        - expiry_date
+        - domains
+        - public_cert
+        - private_cert
+      properties:
+        name:
+          type: string
+          description: Certificate Name (Main domain)
+          example: example.com
+        serial_number:
+          type: string
+          description: Serial Number
+        key_type:
+          type: string
+          example: RSA
+        expiry_date:
+          type: string
+          format: date-time
+        domains:
+          type: array
+          items:
+            type: string
+          description: List domains (Main + Alternative domains)
+          example: [ example.com, www.example.com, sub.example.com ]
+        public_cert:
+          type: string
+          format: binary
+        private_cert:
+          type: string
+          format: binary
+    general-res:
+      title: General Response
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+  responses:
+    bad-request:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/general-res'
+    not-found:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/general-res'
+    default-error:
+      description: General error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/general-res'
