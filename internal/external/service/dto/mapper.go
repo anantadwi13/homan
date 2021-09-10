@@ -71,8 +71,11 @@ func MapExternalToServiceConfig(name string, svc *Service) (model.ServiceConfig,
 	}
 	for _, volume := range svc.Volumes {
 		v := strings.SplitN(volume, ":", 2)
-		if len(v) == 2 {
-			volumeBindings = append(volumeBindings)
+		switch len(v) {
+		case 2:
+			volumeBindings = append(volumeBindings, model.NewVolumeBinding(v[0], v[1]))
+		case 1:
+			volumeBindings = append(volumeBindings, model.NewVolume(v[0]))
 		}
 	}
 
