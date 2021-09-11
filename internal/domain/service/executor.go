@@ -13,6 +13,7 @@ var (
 )
 
 type Executor interface {
+	InitVolume(ctx context.Context, configs ...model.ServiceConfig) error
 	Run(ctx context.Context, configs ...model.ServiceConfig) error
 	Stop(ctx context.Context, configs ...model.ServiceConfig) error
 	Restart(ctx context.Context, configs ...model.ServiceConfig) error

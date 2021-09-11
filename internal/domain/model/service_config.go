@@ -42,7 +42,7 @@ type sc struct {
 
 func NewServiceConfig(
 	name string, domainName string, image string, environments []string, portBindings []Port, volBindings []Volume,
-	networks []string, serviceType ServiceTag,
+	networks []string, serviceTag ServiceTag,
 ) ServiceConfig {
 	return &sc{
 		image:        image,
@@ -53,7 +53,7 @@ func NewServiceConfig(
 		volBindings:  volBindings,
 		networks:     networks,
 		isCustom:     false,
-		serviceTag:   serviceType,
+		serviceTag:   serviceTag,
 	}
 }
 

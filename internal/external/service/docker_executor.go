@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/anantadwi13/cli-whm/internal/domain"
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	domainService "github.com/anantadwi13/cli-whm/internal/domain/service"
@@ -14,6 +15,7 @@ type dockerExecutor struct {
 	c        domain.Config
 	cmd      Commander
 	registry domainService.Registry
+	storage  domainService.Storage
 }
 
 var ErrorDockerExecutorNetworkExist = errors.New("error [docker_executor]: network already exist")
@@ -24,12 +26,69 @@ func NewDockerExecutor(
 	c domain.Config,
 	cmd Commander,
 	registry domainService.Registry,
+	storage domainService.Storage,
 ) domainService.Executor {
 	return &dockerExecutor{
 		c:        c,
 		cmd:      cmd,
 		registry: registry,
+		storage:  storage,
 	}
+}
+
+func (d *dockerExecutor) InitVolume(ctx context.Context, configs ...model.ServiceConfig) error {
+	var newServices []model.ServiceConfig
+	defer func() {
+		for _, config := range newServices {
+			_ = d.Stop(ctx, config)
+		}
+	}()
+
+	for _, config := range configs {
+		if config == nil {
+			continue
+		}
+		if !config.IsValid() {
+			return domainService.ErrorExecutorServiceConfigInvalid
+		}
+
+		newService := model.NewServiceConfig(
+			config.Name(),
+			config.DomainName(),
+			config.Image(),
+			config.Environments(),
+			nil,
+			nil,
+			nil,
+			config.Tag(),
+		)
+
+		err := d.Run(ctx, newService)
+		if err != nil {
+			return err
+		}
+
+		newServices = append(newServices, newService)
+
+		for _, volume := range config.VolumeBindings() {
+			err := d.storage.Mkdir(volume.HostPath())
+			if err != nil {
+				return err
+			}
+
+			cmdRes, err := d.cmd.RunCommand(
+				ctx,
+				"docker",
+				"cp",
+				fmt.Sprintf("%v:%v/.", d.getContainerName(ctx, config), volume.ContainerPath()),
+				volume.HostPath(),
+			)
+			if err != nil {
+				return errors.New(string(cmdRes))
+			}
+		}
+	}
+	return nil
 }
 
 func (d *dockerExecutor) Run(ctx context.Context, configs ...model.ServiceConfig) error {
@@ -72,7 +131,7 @@ func (d *dockerExecutor) Run(ctx context.Context, configs ...model.ServiceConfig
 			args = append(args, "--network")
 			args = append(args, network)
 			args = append(args, "--network-alias")
-			args = append(args, d.getContainerHostname(ctx, config))
+			args = append(args, config.Name())
 		}
 
 		args = append(args, config.Image())
@@ -248,17 +307,6 @@ func (d *dockerExecutor) getContainerName(ctx context.Context, config model.Serv
 	if config == nil {
 		return ""
 	}
-	hostname := d.getContainerHostname(ctx, config)
+	hostname := config.Name()
 	return d.c.ProjectName() + "_" + hostname
-}
-
-func (d *dockerExecutor) getContainerHostname(ctx context.Context, config model.ServiceConfig) string {
-	if config == nil {
-		return ""
-	}
-	name := config.Name()
-	if isSystem, err := d.registry.IsSystem(ctx, config); err == nil && isSystem {
-		name = d.c.SystemNamePrefix() + config.Name()
-	}
-	return name
 }

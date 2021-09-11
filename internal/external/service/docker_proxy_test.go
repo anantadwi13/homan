@@ -29,7 +29,7 @@ func init() {
 	}
 	storage := service.NewStorage()
 	r := NewLocalRegistry(c2, storage)
-	de2 = NewDockerExecutor(c2, cmd, r)
+	de2 = NewDockerExecutor(c2, cmd, r, storage)
 	proxy = NewDockerProxy(c2, de2)
 }
 

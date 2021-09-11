@@ -6,6 +6,10 @@ import (
 	"github.com/anantadwi13/cli-whm/internal/domain"
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	"github.com/anantadwi13/cli-whm/internal/domain/service"
+	"github.com/google/uuid"
+	"net"
+	"strconv"
+	"time"
 )
 
 type dockerProxy struct {
@@ -14,21 +18,24 @@ type dockerProxy struct {
 }
 
 func NewDockerProxy(config domain.Config, executor service.Executor) service.Proxy {
-	return &dockerProxy{config, executor}
+	return &dockerProxy{config: config, executor: executor}
 }
 
 func (d *dockerProxy) Execute(ctx context.Context, request func(proxy *model.ProxyDetail) error) (err error) {
 	proxyService := model.NewServiceConfig(
 		d.proxyName(),
 		"",
-		"anantadwi13/docker-proxy:0.1.0",
+		"anantadwi13/docker-proxy:0.1.1",
 		[]string{},
 		[]model.Port{model.NewPortBinding(d.proxyPort(), 80)},
 		[]model.Volume{},
 		[]string{d.config.ProjectName()},
 		model.TagProxy,
 	)
-	proxyDetail := &model.ProxyDetail{Host: fmt.Sprintf("http://%v:%v", "localhost", d.proxyPort())}
+	proxyDetail := &model.ProxyDetail{
+		Host:     fmt.Sprintf("%v:%v", "localhost", d.proxyPort()),
+		FullPath: fmt.Sprintf("http://%v:%v/", "localhost", d.proxyPort()),
+	}
 
 	// Start Proxy
 	err = d.executor.Run(ctx, proxyService)
@@ -54,9 +61,19 @@ func (d *dockerProxy) Execute(ctx context.Context, request func(proxy *model.Pro
 }
 
 func (d *dockerProxy) proxyName() string {
-	return d.config.SystemNamePrefix() + "proxy"
+	return d.config.SystemNamePrefix() + "proxy-" + uuid.New().String()
 }
 
 func (d *dockerProxy) proxyPort() int {
-	return 5555
+	selectedPort := -1
+	for port := 20001; port < 65536; port++ {
+		timeout := 10 * time.Millisecond
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort("localhost", strconv.Itoa(port)), timeout)
+		if err != nil || conn == nil {
+			selectedPort = port
+			break
+		}
+		_ = conn.Close()
+	}
+	return selectedPort
 }

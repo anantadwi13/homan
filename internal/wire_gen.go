@@ -7,10 +7,12 @@
 package internal
 
 import (
+	"embed"
 	"github.com/anantadwi13/cli-whm/internal/domain"
 	"github.com/anantadwi13/cli-whm/internal/domain/service"
 	"github.com/anantadwi13/cli-whm/internal/domain/usecase"
 	service2 "github.com/anantadwi13/cli-whm/internal/external/service"
+	usecase2 "github.com/anantadwi13/cli-whm/internal/external/usecase"
 	"github.com/google/wire"
 )
 
@@ -19,12 +21,14 @@ import (
 func NewApp(config domain.Config) App {
 	storage := service.NewStorage()
 	registry := service2.NewLocalRegistry(config, storage)
-	ucInit := usecase.NewUcInit(registry, config, storage)
 	commander := service2.NewCommander()
-	executor := service2.NewDockerExecutor(config, commander, registry)
+	executor := service2.NewDockerExecutor(config, commander, registry, storage)
+	fs := _wireFSValue
 	ucUp := usecase.NewUcUp(registry, executor)
+	proxy := service2.NewDockerProxy(config, executor)
+	ucInit := usecase2.NewUcInit(registry, executor, config, storage, fs, ucUp, proxy)
 	ucDown := usecase.NewUcDown(registry, executor)
-	ucAdd := usecase.NewUcAdd(config, registry, executor)
+	ucAdd := usecase2.NewUcAdd(config, registry, executor, proxy)
 	internalUseCases := useCases{
 		Init: ucInit,
 		Up:   ucUp,
@@ -33,18 +37,28 @@ func NewApp(config domain.Config) App {
 	}
 	app := App{
 		UseCases: internalUseCases,
+		Config:   config,
 	}
 	return app
 }
 
+var (
+	_wireFSValue = Templates
+)
+
 // app.go:
 
-var useCasesSet = wire.NewSet(usecase.NewUcInit, usecase.NewUcUp, usecase.NewUcDown, usecase.NewUcAdd, wire.Struct(new(useCases), "Init", "Up", "Down", "Add"))
+var (
+	//go:embed template/*
+	Templates embed.FS
+)
+
+var useCasesSet = wire.NewSet(usecase2.NewUcInit, usecase.NewUcUp, usecase.NewUcDown, usecase2.NewUcAdd, wire.Struct(new(useCases), "Init", "Up", "Down", "Add"))
 
 var serviceSet = wire.NewSet(service2.NewCommander, service2.NewLocalRegistry, service2.NewDockerExecutor, service.NewStorage, service2.NewDockerProxy, wire.Struct(new(services), "Commander", "Executor", "Registry", "Storage", "Proxy"))
 
 var applicationSet = wire.NewSet(
-	useCasesSet, wire.Struct(new(App), "UseCases"),
+	useCasesSet, wire.Value(Templates), wire.Struct(new(App), "UseCases", "Config"),
 )
 
 type useCases struct {
@@ -64,4 +78,5 @@ type services struct {
 
 type App struct {
 	UseCases useCases
+	Config   domain.Config
 }

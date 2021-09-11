@@ -26,7 +26,7 @@ func init() {
 	}
 	storage := service.NewStorage()
 	r = NewLocalRegistry(c, storage)
-	de = NewDockerExecutor(c, cmd, r)
+	de = NewDockerExecutor(c, cmd, r, storage)
 }
 
 func TestDockerExecutor(t *testing.T) {

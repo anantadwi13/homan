@@ -4,18 +4,25 @@
 package internal
 
 import (
+	"embed"
 	"github.com/anantadwi13/cli-whm/internal/domain"
 	domainService "github.com/anantadwi13/cli-whm/internal/domain/service"
-	"github.com/anantadwi13/cli-whm/internal/domain/usecase"
+	domainUsecase "github.com/anantadwi13/cli-whm/internal/domain/usecase"
 	externalService "github.com/anantadwi13/cli-whm/internal/external/service"
+	externalUsecase "github.com/anantadwi13/cli-whm/internal/external/usecase"
 	"github.com/google/wire"
 )
 
+var (
+	//go:embed template/*
+	Templates embed.FS
+)
+
 var useCasesSet = wire.NewSet(
-	usecase.NewUcInit,
-	usecase.NewUcUp,
-	usecase.NewUcDown,
-	usecase.NewUcAdd,
+	externalUsecase.NewUcInit,
+	domainUsecase.NewUcUp,
+	domainUsecase.NewUcDown,
+	externalUsecase.NewUcAdd,
 	wire.Struct(new(useCases), "Init", "Up", "Down", "Add"),
 )
 
@@ -30,14 +37,15 @@ var serviceSet = wire.NewSet(
 
 var applicationSet = wire.NewSet(
 	useCasesSet,
-	wire.Struct(new(App), "UseCases"),
+	wire.Value(Templates),
+	wire.Struct(new(App), "UseCases", "Config"),
 )
 
 type useCases struct {
-	Init usecase.UcInit
-	Up   usecase.UcUp
-	Down usecase.UcDown
-	Add  usecase.UcAdd
+	Init domainUsecase.UcInit
+	Up   domainUsecase.UcUp
+	Down domainUsecase.UcDown
+	Add  domainUsecase.UcAdd
 }
 
 type services struct {
@@ -50,6 +58,7 @@ type services struct {
 
 type App struct {
 	UseCases useCases
+	Config   domain.Config
 }
 
 func NewApp(config domain.Config) App {
