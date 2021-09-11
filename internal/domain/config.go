@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 )
@@ -17,6 +19,7 @@ type Config interface {
 	// TempPath contains full path
 	TempPath() string
 
+	PublicIP() string
 	ProjectName() string
 	ServiceRegistryConfPath() string
 	SystemNamePrefix() string
@@ -28,7 +31,8 @@ type ConfigParams struct {
 	DataPath                string // DataPath relative to BasePath, default "/data"
 	CustomPath              string // CustomPath relative to BasePath, default "/custom"
 	TempPath                string // TempPath relative to BasePath, default "/temp"
-	ProjectName             string // ServiceRegistryConfName relative to ConfigPath, default "homan"
+	PublicIP                string // PublicIP default : Public IP of current server, example "45.45.45.45"
+	ProjectName             string // ProjectName default "homan"
 	ServiceRegistryConfName string // ServiceRegistryConfName relative to ConfigPath, default "registry"
 	SystemNamePrefix        string // default "system-"
 }
@@ -39,6 +43,7 @@ type config struct {
 	customPath              string
 	dataPath                string
 	tempPath                string
+	publicIP                string
 	projectName             string
 	serviceRegistryConfPath string
 	systemNamePrefix        string
@@ -76,6 +81,17 @@ func NewConfig(params ConfigParams) (Config, error) {
 	c.customPath = joinPath(c.basePath, params.CustomPath, "/custom")
 	c.dataPath = joinPath(c.basePath, params.DataPath, "/data")
 	c.tempPath = joinPath(c.basePath, params.TempPath, "/temp")
+
+	publicIp := "127.0.0.1"
+	publicIpRes, err := http.Get("https://api.ipify.org?format=text")
+	if err == nil {
+		ip, err := io.ReadAll(publicIpRes.Body)
+		if err == nil {
+			publicIp = string(ip)
+		}
+	}
+
+	c.publicIP = checkEmpty(params.PublicIP, publicIp)
 	c.projectName = checkEmpty(params.ProjectName, "homan")
 	c.serviceRegistryConfPath = joinPath(c.configPath, params.ServiceRegistryConfName, "registry")
 	c.systemNamePrefix = checkEmpty(params.SystemNamePrefix, "system-")
@@ -101,6 +117,10 @@ func (c *config) DataPath() string {
 
 func (c *config) TempPath() string {
 	return c.tempPath
+}
+
+func (c *config) PublicIP() string {
+	return c.publicIP
 }
 
 func (c *config) ProjectName() string {

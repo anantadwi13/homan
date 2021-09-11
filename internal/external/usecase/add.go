@@ -2,11 +2,13 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/anantadwi13/cli-whm/internal/domain"
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	"github.com/anantadwi13/cli-whm/internal/domain/service"
 	domainUsecase "github.com/anantadwi13/cli-whm/internal/domain/usecase"
+	"github.com/anantadwi13/cli-whm/internal/external/api/dns"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/backend"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/backend_switching_rule"
@@ -221,7 +223,34 @@ func (u *ucAdd) postExecute(
 
 			// Add Domain Name
 			// TODO
-			_ = dnsService
+			dnsClient, err := dns.NewDnsClient(proxy.FullPath, dnsService.Name()+":5555")
+			if err != nil {
+				return err
+			}
+
+			createZoneRes, err := dnsClient.CreateZoneWithResponse(ctx, dns.CreateZoneJSONRequestBody{
+				Domain:    config.DomainName(),
+				MailAddr:  fmt.Sprintf("root.%v", config.DomainName()),
+				PrimaryNs: fmt.Sprintf("ns1.%v", config.DomainName()),
+			})
+			if err != nil || createZoneRes.JSON201 == nil {
+				if err == nil {
+					err = errors.New("domain : unable to create zone")
+				}
+				return err
+			}
+
+			createRecordRes, err := dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
+				Name:  "@",
+				Type:  "A",
+				Value: u.config.PublicIP(),
+			})
+			if err != nil || createRecordRes.JSON201 == nil {
+				if err == nil {
+					err = errors.New("domain : unable to create record")
+				}
+				return err
+			}
 
 			// Add Certificate
 			// TODO

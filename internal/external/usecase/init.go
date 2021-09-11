@@ -213,7 +213,7 @@ func (u *ucInit) systemServices() map[string]model.ServiceConfig {
 		"haproxy": model.NewServiceConfig(
 			u.systemName("haproxy"),
 			"",
-			"haproxytech/haproxy-debian:2.5",
+			"haproxytech/haproxy-debian:2.4",
 			[]string{},
 			[]model.Port{
 				model.NewPort(5555),
@@ -229,7 +229,7 @@ func (u *ucInit) systemServices() map[string]model.ServiceConfig {
 		"dns": model.NewServiceConfig(
 			u.systemName("dns"),
 			"",
-			"anantadwi13/dns-server-manager:0.2.0",
+			"anantadwi13/dns-server-manager:0.3.0",
 			[]string{},
 			[]model.Port{
 				model.NewPort(5555),
@@ -245,7 +245,7 @@ func (u *ucInit) systemServices() map[string]model.ServiceConfig {
 		"certman": model.NewServiceConfig(
 			u.systemName("certman"),
 			"",
-			"anantadwi13/letsencrypt-manager:0.1.1",
+			"anantadwi13/letsencrypt-manager:0.2.0",
 			[]string{},
 			[]model.Port{
 				model.NewPort(5555),
