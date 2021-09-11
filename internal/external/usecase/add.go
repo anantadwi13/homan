@@ -8,6 +8,7 @@ import (
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	"github.com/anantadwi13/cli-whm/internal/domain/service"
 	domainUsecase "github.com/anantadwi13/cli-whm/internal/domain/usecase"
+	"github.com/anantadwi13/cli-whm/internal/external/api/certman"
 	"github.com/anantadwi13/cli-whm/internal/external/api/dns"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/backend"
@@ -147,6 +148,15 @@ func (u *ucAdd) postExecute(
 	}
 	dnsService := services[0]
 
+	services, err = u.registry.GetSystemServiceByTag(ctx, model.TagCertMan)
+	if err != nil {
+		return domainUsecase.WrapErrorSystem(err)
+	}
+	if len(services) != 1 {
+		return domainUsecase.ErrorUcAddPostExecution
+	}
+	certmanService := services[0]
+
 	if config.DomainName() != "" {
 		err = u.proxy.Execute(ctx, func(proxy *model.ProxyDetail) error {
 
@@ -222,7 +232,6 @@ func (u *ucAdd) postExecute(
 			}
 
 			// Add Domain Name
-			// TODO
 			dnsClient, err := dns.NewDnsClient(proxy.FullPath, dnsService.Name()+":5555")
 			if err != nil {
 				return err
@@ -252,8 +261,35 @@ func (u *ucAdd) postExecute(
 				return err
 			}
 
+			createRecordRes, err = dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
+				Name:  "www",
+				Type:  "A",
+				Value: u.config.PublicIP(),
+			})
+			if err != nil || createRecordRes.JSON201 == nil {
+				if err == nil {
+					err = errors.New("domain : unable to create record")
+				}
+				return err
+			}
+
 			// Add Certificate
-			// TODO
+			certmanClient, err := certman.NewCertmanClient(proxy.FullPath, certmanService.Name()+":5555")
+			if err != nil {
+				return err
+			}
+
+			createCertificateRes, err := certmanClient.CreateCertificateWithResponse(ctx, certman.CreateCertificateJSONRequestBody{
+				Domain:     config.DomainName(),
+				Email:      fmt.Sprintf("admin@%v", config.DomainName()),
+				AltDomains: &[]string{fmt.Sprintf("www.%v", config.DomainName())},
+			})
+			if err != nil || createCertificateRes.JSON201 == nil {
+				if err == nil {
+					err = errors.New("certificate : unable to create ssl certificate")
+				}
+				return err
+			}
 
 			return nil
 		})

@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Let's Encrypt Manager
   description: Let's Encrypt Manager
-  version: 0.1.0
+  version: 0.2.0
 servers:
   - url: 'http://{hostname}:5555'
     variables:
@@ -11,6 +11,7 @@ servers:
 paths:
   /certificates:
     get:
+      operationId: getAllCertificates
       summary: Get all certificates
       responses:
         200:
@@ -24,12 +25,29 @@ paths:
         default:
           $ref: "#/components/responses/default-error"
     post:
+      operationId: createCertificate
       summary: Create certificate
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/certificate-req"
+              type: object
+              required: [ email,domain ]
+              properties:
+                email:
+                  type: string
+                  description: Email address
+                  example: admin@example.com
+                domain:
+                  type: string
+                  description: Domain
+                  example: example.com
+                alt_domains:
+                  type: array
+                  items:
+                    type: string
+                  description: Alternative Domain
+                  example: [ www.example.com, sub.example.com ]
       responses:
         201:
           description: Success
@@ -42,6 +60,7 @@ paths:
         default:
           $ref: "#/components/responses/default-error"
     put:
+      operationId: renewAllCertificates
       summary: Renew all certificates
       responses:
         200:
@@ -54,6 +73,7 @@ paths:
           $ref: "#/components/responses/default-error"
   /certificates/{domain}:
     get:
+      operationId: getCertificateByDomain
       summary: Get certificate by domain name
       parameters:
         - name: domain
@@ -74,6 +94,7 @@ paths:
         default:
           $ref: '#/components/responses/default-error'
     put:
+      operationId: renewCertificateByDomain
       summary: Renew certificate for selected domain
       parameters:
         - name: domain
@@ -94,6 +115,7 @@ paths:
         default:
           $ref: "#/components/responses/default-error"
     delete:
+      operationId: deleteCertificate
       summary: Delete certificate
       parameters:
         - name: domain
@@ -115,24 +137,6 @@ paths:
           $ref: '#/components/responses/default-error'
 components:
   schemas:
-    certificate-req:
-      type: object
-      required: [ email,domain ]
-      properties:
-        email:
-          type: string
-          description: Email address
-          example: admin@example.com
-        domain:
-          type: string
-          description: Domain
-          example: example.com
-        alt_domains:
-          type: array
-          items:
-            type: string
-          description: Alternative Domain
-          example: [ www.example.com, sub.example.com ]
     certificate-res:
       title: Certificate
       type: object
