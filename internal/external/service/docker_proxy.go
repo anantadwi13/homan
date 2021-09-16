@@ -8,6 +8,7 @@ import (
 	"github.com/anantadwi13/cli-whm/internal/domain/service"
 	"github.com/google/uuid"
 	"net"
+	"net/http"
 	"strconv"
 	"time"
 )
@@ -50,6 +51,23 @@ func (d *dockerProxy) Execute(ctx context.Context, request func(proxy *model.Pro
 			err = err2
 		}
 	}()
+
+	// Wait until proxy is running
+	c := http.DefaultClient
+	req, err := http.NewRequest(http.MethodGet, proxyDetail.FullPath, nil)
+	if err != nil {
+		return err
+	}
+	do, err := c.Do(req)
+	retry := 10
+	for retry > 0 && (err != nil || do.StatusCode != http.StatusInternalServerError) {
+		time.Sleep(100 * time.Millisecond)
+		do, err = c.Do(req)
+		retry--
+	}
+	if err != nil {
+		return
+	}
 
 	// Send Request Through Proxy
 	err = request(proxyDetail)

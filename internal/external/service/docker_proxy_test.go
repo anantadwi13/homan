@@ -48,11 +48,15 @@ func TestDockerProxy(t *testing.T) {
 	err := de2.Run(context.TODO(), nginx)
 	assert.Nil(t, err)
 
+	defer func() {
+		_ = de2.Stop(context.TODO(), nginx)
+	}()
+
 	err = proxy.Execute(context.TODO(), func(proxy *model.ProxyDetail) error {
 		client := http.DefaultClient
 
 		// Call nginx, should return OK
-		request, err := http.NewRequest(http.MethodGet, proxy.Host, nil)
+		request, err := http.NewRequest(http.MethodGet, proxy.FullPath, nil)
 		assert.Nil(t, err)
 		request.Header.Add("X-Target-Host", "http://test-container")
 		response, err := client.Do(request)
@@ -63,7 +67,7 @@ func TestDockerProxy(t *testing.T) {
 		assert.Nil(t, err)
 
 		// Call nginx, should return Not OK (Internal Server Error)
-		request, err = http.NewRequest(http.MethodGet, proxy.Host, nil)
+		request, err = http.NewRequest(http.MethodGet, proxy.FullPath, nil)
 		assert.Nil(t, err)
 		request.Header.Add("X-Target-Host", "http://test-container")
 		response, err = client.Do(request)

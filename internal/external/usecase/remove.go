@@ -12,8 +12,11 @@ import (
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/backend"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/backend_switching_rule"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/configuration"
+	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/http_request_rule"
+	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/storage"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/transactions"
 	"github.com/anantadwi13/cli-whm/internal/util"
+	"strings"
 )
 
 type ucRemove struct {
@@ -134,6 +137,8 @@ func (u *ucRemove) postExecute(ctx context.Context, config model.ServiceConfig) 
 			transactionId := &transaction.Payload.ID
 			mainFrontendName := u.config.ProjectName()
 
+			// Delete Backend Switching Rules
+
 			rules, err := haproxyClient.BackendSwitchingRule.GetBackendSwitchingRules(
 				backend_switching_rule.NewGetBackendSwitchingRulesParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName),
 				auth,
@@ -142,12 +147,32 @@ func (u *ucRemove) postExecute(ctx context.Context, config model.ServiceConfig) 
 				return err
 			}
 
-			// Delete Backend Switching Rules
-
 			for _, rule := range rules.Payload.Data {
 				if rule.Name == config.Name() {
 					_, _, err = haproxyClient.BackendSwitchingRule.DeleteBackendSwitchingRule(
 						backend_switching_rule.NewDeleteBackendSwitchingRuleParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName).WithIndex(*rule.Index),
+						auth,
+					)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			// Delete Http Request Rules
+
+			requestRules, err := haproxyClient.HTTPRequestRule.GetHTTPRequestRules(
+				http_request_rule.NewGetHTTPRequestRulesParams().WithParentType("frontend").WithParentName(mainFrontendName).WithTransactionID(transactionId),
+				auth,
+			)
+			if err != nil {
+				return err
+			}
+
+			for _, rule := range requestRules.Payload.Data {
+				if strings.Contains(rule.CondTest, config.DomainName()) {
+					_, _, err = haproxyClient.HTTPRequestRule.DeleteHTTPRequestRule(
+						http_request_rule.NewDeleteHTTPRequestRuleParams().WithParentType("frontend").WithParentName(mainFrontendName).WithTransactionID(transactionId).WithIndex(*rule.Index),
 						auth,
 					)
 					if err != nil {
@@ -181,6 +206,18 @@ func (u *ucRemove) postExecute(ctx context.Context, config model.ServiceConfig) 
 					err = errors.New("domain : unable to delete zone")
 				}
 				return err
+			}
+
+			// Delete Certificate in HAProxy
+			_, err = haproxyClient.Storage.GetOneStorageSSLCertificate(storage.NewGetOneStorageSSLCertificateParams().WithName(config.DomainName()), auth)
+			if err == nil {
+				_, _, err = haproxyClient.Storage.DeleteStorageSSLCertificate(
+					storage.NewDeleteStorageSSLCertificateParams().WithName(config.DomainName()).WithForceReload(util.Bool(true)),
+					auth,
+				)
+				if err != nil {
+					return err
+				}
 			}
 
 			return nil

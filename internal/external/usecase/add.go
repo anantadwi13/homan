@@ -15,6 +15,7 @@ import (
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/backend"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/backend_switching_rule"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/configuration"
+	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/http_request_rule"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/server"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/storage"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/transactions"
@@ -187,8 +188,16 @@ func (u *ucAdd) postExecute(
 			if err != nil {
 				return err
 			}
+			requestRulesRes, err := haproxyClient.HTTPRequestRule.GetHTTPRequestRules(
+				http_request_rule.NewGetHTTPRequestRulesParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName),
+				auth,
+			)
+			if err != nil {
+				return err
+			}
 
 			backendRules := rules.Payload.Data
+			requestRules := requestRulesRes.Payload.Data
 
 			configBackend := &models.Backend{
 				Name:       config.Name(),
@@ -211,6 +220,16 @@ func (u *ucAdd) postExecute(
 				CondTest: fmt.Sprintf("{ hdr(host) -i %v www.%v }", config.DomainName(), config.DomainName()),
 			}
 
+			configHttpRequestRule := &models.HTTPRequestRule{
+				Index:      util.Int64(int64(len(requestRules))),
+				Type:       "redirect",
+				RedirType:  "scheme",
+				RedirValue: "https",
+				RedirCode:  util.Int64(301),
+				Cond:       "if",
+				CondTest:   fmt.Sprintf("{ hdr(host) -i %v www.%v } !{ ssl_fc }", config.DomainName(), config.DomainName()),
+			}
+
 			_, _, err = haproxyClient.Backend.CreateBackend(backend.NewCreateBackendParams().WithTransactionID(transactionId).WithData(configBackend), auth)
 			if err != nil {
 				return err
@@ -223,6 +242,14 @@ func (u *ucAdd) postExecute(
 
 			_, _, err = haproxyClient.BackendSwitchingRule.CreateBackendSwitchingRule(
 				backend_switching_rule.NewCreateBackendSwitchingRuleParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName).WithData(configBackendRule),
+				auth,
+			)
+			if err != nil {
+				return err
+			}
+
+			_, _, err = haproxyClient.HTTPRequestRule.CreateHTTPRequestRule(
+				http_request_rule.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestRule),
 				auth,
 			)
 			if err != nil {
