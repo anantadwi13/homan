@@ -94,6 +94,16 @@ func (u *ucInit) postExecute(
 		return domainUsecase.WrapErrorSystem(err)
 	}
 
+	// Copy Example SSL
+	haproxySSL, err := u.templates.ReadFile("template/haproxy/example.com")
+	if err != nil {
+		return domainUsecase.WrapErrorSystem(err)
+	}
+	err = u.storage.WriteFile(u.filePathJoin("/haproxy/ssl/example.com"), haproxySSL)
+	if err != nil {
+		return domainUsecase.WrapErrorSystem(err)
+	}
+
 	// Start All Services
 	err2 := u.ucUp.Execute(ctx, nil)
 	if err2 != nil {
@@ -147,11 +157,18 @@ func (u *ucInit) postExecute(
 			DefaultBackend: mainBackend.Name,
 		}
 
-		port := int64(80)
 		mainBind := &models.Bind{
 			Address: "*",
 			Name:    "http",
-			Port:    &port,
+			Port:    util.Int64(80),
+		}
+
+		mainSecureBind := &models.Bind{
+			Address:        "*",
+			Name:           "https",
+			Port:           util.Int64(443),
+			Ssl:            true,
+			SslCertificate: "/etc/haproxy/ssl/",
 		}
 
 		// Create Main Backend
@@ -181,6 +198,11 @@ func (u *ucInit) postExecute(
 		}
 
 		_, _, err = haproxyClient.Bind.CreateBind(bind.NewCreateBindParams().WithTransactionID(transactionId).WithData(mainBind).WithFrontend(mainFrontend.Name), auth)
+		if err != nil {
+			return err
+		}
+
+		_, _, err = haproxyClient.Bind.CreateBind(bind.NewCreateBindParams().WithTransactionID(transactionId).WithData(mainSecureBind).WithFrontend(mainFrontend.Name), auth)
 		if err != nil {
 			return err
 		}

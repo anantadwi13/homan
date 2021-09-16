@@ -24,16 +24,18 @@ func NewApp(config domain.Config) App {
 	commander := service2.NewCommander()
 	executor := service2.NewDockerExecutor(config, commander, registry, storage)
 	fs := _wireFSValue
-	ucUp := usecase.NewUcUp(registry, executor)
 	proxy := service2.NewDockerProxy(config, executor)
+	ucUp := usecase.NewUcUp(registry, executor, proxy)
 	ucInit := usecase2.NewUcInit(registry, executor, config, storage, fs, ucUp, proxy)
 	ucDown := usecase.NewUcDown(registry, executor)
 	ucAdd := usecase2.NewUcAdd(config, registry, executor, proxy)
+	ucRemove := usecase2.NewUcRemove(config, registry, executor, proxy)
 	internalUseCases := useCases{
-		Init: ucInit,
-		Up:   ucUp,
-		Down: ucDown,
-		Add:  ucAdd,
+		Init:   ucInit,
+		Up:     ucUp,
+		Down:   ucDown,
+		Add:    ucAdd,
+		Remove: ucRemove,
 	}
 	app := App{
 		UseCases: internalUseCases,
@@ -53,7 +55,7 @@ var (
 	Templates embed.FS
 )
 
-var useCasesSet = wire.NewSet(usecase2.NewUcInit, usecase.NewUcUp, usecase.NewUcDown, usecase2.NewUcAdd, wire.Struct(new(useCases), "Init", "Up", "Down", "Add"))
+var useCasesSet = wire.NewSet(usecase2.NewUcInit, usecase.NewUcUp, usecase.NewUcDown, usecase2.NewUcAdd, usecase2.NewUcRemove, wire.Struct(new(useCases), "Init", "Up", "Down", "Add", "Remove"))
 
 var serviceSet = wire.NewSet(service2.NewCommander, service2.NewLocalRegistry, service2.NewDockerExecutor, service.NewStorage, service2.NewDockerProxy, wire.Struct(new(services), "Commander", "Executor", "Registry", "Storage", "Proxy"))
 
@@ -62,10 +64,11 @@ var applicationSet = wire.NewSet(
 )
 
 type useCases struct {
-	Init usecase.UcInit
-	Up   usecase.UcUp
-	Down usecase.UcDown
-	Add  usecase.UcAdd
+	Init   usecase.UcInit
+	Up     usecase.UcUp
+	Down   usecase.UcDown
+	Add    usecase.UcAdd
+	Remove usecase.UcRemove
 }
 
 type services struct {

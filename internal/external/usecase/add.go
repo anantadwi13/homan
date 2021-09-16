@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,9 +16,11 @@ import (
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/backend_switching_rule"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/configuration"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/server"
+	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/storage"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/client/transactions"
 	"github.com/anantadwi13/cli-whm/internal/external/api/haproxy/models"
 	"github.com/anantadwi13/cli-whm/internal/util"
+	"github.com/go-openapi/runtime"
 	"path/filepath"
 )
 
@@ -205,7 +208,7 @@ func (u *ucAdd) postExecute(
 				Index:    util.Int64(int64(len(backendRules))),
 				Name:     configBackend.Name,
 				Cond:     "if",
-				CondTest: fmt.Sprintf("{ hdr(host) -i %v }", config.DomainName()),
+				CondTest: fmt.Sprintf("{ hdr(host) -i %v www.%v }", config.DomainName(), config.DomainName()),
 			}
 
 			_, _, err = haproxyClient.Backend.CreateBackend(backend.NewCreateBackendParams().WithTransactionID(transactionId).WithData(configBackend), auth)
@@ -239,8 +242,8 @@ func (u *ucAdd) postExecute(
 
 			createZoneRes, err := dnsClient.CreateZoneWithResponse(ctx, dns.CreateZoneJSONRequestBody{
 				Domain:    config.DomainName(),
-				MailAddr:  fmt.Sprintf("root.%v", config.DomainName()),
-				PrimaryNs: fmt.Sprintf("ns1.%v", config.DomainName()),
+				MailAddr:  fmt.Sprintf("root.%v.", config.DomainName()),
+				PrimaryNs: fmt.Sprintf("ns1.%v.", config.DomainName()),
 			})
 			if err != nil || createZoneRes.JSON201 == nil {
 				if err == nil {
@@ -250,6 +253,18 @@ func (u *ucAdd) postExecute(
 			}
 
 			createRecordRes, err := dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
+				Name:  "ns1",
+				Type:  "A",
+				Value: u.config.PublicIP(),
+			})
+			if err != nil || createRecordRes.JSON201 == nil {
+				if err == nil {
+					err = errors.New("domain : unable to create record")
+				}
+				return err
+			}
+
+			createRecordRes, err = dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
 				Name:  "@",
 				Type:  "A",
 				Value: u.config.PublicIP(),
@@ -288,6 +303,29 @@ func (u *ucAdd) postExecute(
 				if err == nil {
 					err = errors.New("certificate : unable to create ssl certificate")
 				}
+				return err
+			}
+
+			getCertificateRes, err := certmanClient.GetCertificateByDomainWithResponse(ctx, config.DomainName())
+			if err != nil || getCertificateRes.JSON200 == nil {
+				if err == nil {
+					err = errors.New("certificate : unable to get ssl certificate")
+				}
+				return err
+			}
+
+			sslRaw := fmt.Sprintf("%v\n%v", getCertificateRes.JSON200.PublicCert, getCertificateRes.JSON200.PrivateCert)
+
+			ssl := bytes.NewReader([]byte(sslRaw))
+
+			_, err = haproxyClient.Storage.CreateStorageSSLCertificate(
+				storage.NewCreateStorageSSLCertificateParams().WithFileUpload(runtime.NamedReader(
+					config.DomainName(),
+					ssl,
+				)).WithForceReload(util.Bool(true)),
+				auth,
+			)
+			if err != nil {
 				return err
 			}
 

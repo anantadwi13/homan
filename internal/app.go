@@ -23,7 +23,8 @@ var useCasesSet = wire.NewSet(
 	domainUsecase.NewUcUp,
 	domainUsecase.NewUcDown,
 	externalUsecase.NewUcAdd,
-	wire.Struct(new(useCases), "Init", "Up", "Down", "Add"),
+	externalUsecase.NewUcRemove,
+	wire.Struct(new(useCases), "Init", "Up", "Down", "Add", "Remove"),
 )
 
 var serviceSet = wire.NewSet(
@@ -42,10 +43,11 @@ var applicationSet = wire.NewSet(
 )
 
 type useCases struct {
-	Init domainUsecase.UcInit
-	Up   domainUsecase.UcUp
-	Down domainUsecase.UcDown
-	Add  domainUsecase.UcAdd
+	Init   domainUsecase.UcInit
+	Up     domainUsecase.UcUp
+	Down   domainUsecase.UcDown
+	Add    domainUsecase.UcAdd
+	Remove domainUsecase.UcRemove
 }
 
 type services struct {
