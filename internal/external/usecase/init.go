@@ -78,6 +78,15 @@ func (u *ucInit) postExecute(
 ) domainUsecase.Error {
 	// Copy Data
 	for _, config := range services {
+		if config.Name() == u.systemName("mysql") {
+			for _, volume := range config.VolumeBindings() {
+				err := u.storage.Mkdir(volume.HostPath())
+				if err != nil {
+					return domainUsecase.WrapErrorSystem(err)
+				}
+			}
+			continue
+		}
 		err := u.executor.InitVolume(ctx, config)
 		if err != nil {
 			return domainUsecase.WrapErrorSystem(err)
@@ -278,6 +287,22 @@ func (u *ucInit) systemServices() map[string]model.ServiceConfig {
 			},
 			[]string{u.config.ProjectName()},
 			model.TagCertMan,
+		),
+		"mysql": model.NewServiceConfig(
+			u.systemName("mysql"),
+			"",
+			"mysql:8",
+			[]string{
+				"MYSQL_ROOT_PASSWORD=my-secret-pw",
+			},
+			[]model.Port{
+				model.NewPort(3306),
+			},
+			[]model.Volume{
+				model.NewVolumeBinding(u.filePathJoin("/mysql"), "/var/lib/mysql"),
+			},
+			[]string{u.config.ProjectName()},
+			model.TagDB,
 		),
 	}
 }

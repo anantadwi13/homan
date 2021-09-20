@@ -23,19 +23,26 @@ import (
 	"github.com/anantadwi13/cli-whm/internal/util"
 	"github.com/go-openapi/runtime"
 	"path/filepath"
+	"regexp"
 )
 
 type ucAdd struct {
-	config   domain.Config
-	registry service.Registry
-	executor service.Executor
-	proxy    service.Proxy
+	config      domain.Config
+	registry    service.Registry
+	executor    service.Executor
+	proxy       service.Proxy
+	regexDomain *regexp.Regexp
 }
 
 func NewUcAdd(
 	config domain.Config, registry service.Registry, executor service.Executor, proxy service.Proxy,
 ) domainUsecase.UcAdd {
-	return &ucAdd{config, registry, executor, proxy}
+	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+	if err != nil {
+		// todo handle error
+		return nil
+	}
+	return &ucAdd{config, registry, executor, proxy, reg}
 }
 
 func (u *ucAdd) Execute(ctx context.Context, params *domainUsecase.UcAddParams) domainUsecase.Error {
@@ -47,11 +54,22 @@ func (u *ucAdd) Execute(ctx context.Context, params *domainUsecase.UcAddParams) 
 	var config model.ServiceConfig
 	switch params.ServiceType {
 	case domainUsecase.ServiceTypeBlog:
+		dbName, err := u.getDbName(params.Domain)
+		if err != nil {
+			return domainUsecase.WrapErrorSystem(err)
+		}
+
 		config = model.NewServiceConfig(
 			params.Name,
 			params.Domain,
 			"wordpress:5.8.0-apache",
-			[]string{},
+			[]string{
+				"WORDPRESS_DB_HOST=system-mysql",
+				"WORDPRESS_DB_USER=root",
+				"WORDPRESS_DB_PASSWORD=my-secret-pw",
+				"WORDPRESS_DB_NAME=" + dbName,
+				"WORDPRESS_TABLE_PREFIX=wp_",
+			},
 			[]model.Port{
 				model.NewPort(80),
 			},
@@ -133,6 +151,9 @@ func (u *ucAdd) postExecute(
 	if err != nil {
 		return nil
 	}
+
+	// Add Database
+	// todo
 
 	services, err := u.registry.GetSystemServiceByTag(ctx, model.TagGateway)
 	if err != nil {
@@ -225,9 +246,18 @@ func (u *ucAdd) postExecute(
 				Type:       "redirect",
 				RedirType:  "scheme",
 				RedirValue: "https",
-				RedirCode:  util.Int64(301),
+				RedirCode:  util.Int64(302),
 				Cond:       "if",
 				CondTest:   fmt.Sprintf("{ hdr(host) -i %v www.%v } !{ ssl_fc }", config.DomainName(), config.DomainName()),
+			}
+
+			configHttpRequestHeaderRule := &models.HTTPRequestRule{
+				Index:     util.Int64(int64(len(requestRules) + 1)),
+				Type:      "set-header",
+				HdrName:   "X-Forwarded-Proto",
+				HdrFormat: "https",
+				Cond:      "if",
+				CondTest:  fmt.Sprintf("{ hdr(host) -i %v www.%v }", config.DomainName(), config.DomainName()),
 			}
 
 			_, _, err = haproxyClient.Backend.CreateBackend(backend.NewCreateBackendParams().WithTransactionID(transactionId).WithData(configBackend), auth)
@@ -250,6 +280,14 @@ func (u *ucAdd) postExecute(
 
 			_, _, err = haproxyClient.HTTPRequestRule.CreateHTTPRequestRule(
 				http_request_rule.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestRule),
+				auth,
+			)
+			if err != nil {
+				return err
+			}
+
+			_, _, err = haproxyClient.HTTPRequestRule.CreateHTTPRequestRule(
+				http_request_rule.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestHeaderRule),
 				auth,
 			)
 			if err != nil {
@@ -364,4 +402,8 @@ func (u *ucAdd) postExecute(
 	}
 
 	return nil
+}
+
+func (u *ucAdd) getDbName(domainName string) (string, error) {
+	return u.regexDomain.ReplaceAllString(domainName, "_"), nil
 }

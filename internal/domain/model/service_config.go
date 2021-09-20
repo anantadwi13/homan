@@ -10,6 +10,7 @@ const (
 	TagProxy   = ServiceTag("proxy")
 	TagDNS     = ServiceTag("dns")
 	TagCertMan = ServiceTag("certman")
+	TagDB      = ServiceTag("database")
 )
 
 type ServiceConfig interface {

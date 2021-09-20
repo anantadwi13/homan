@@ -9,6 +9,7 @@ import (
 	"github.com/anantadwi13/cli-whm/internal/domain/model"
 	domainService "github.com/anantadwi13/cli-whm/internal/domain/service"
 	"github.com/anantadwi13/cli-whm/internal/external/service/dto"
+	"time"
 )
 
 type dockerExecutor struct {
@@ -68,6 +69,17 @@ func (d *dockerExecutor) InitVolume(ctx context.Context, configs ...model.Servic
 			return err
 		}
 
+		isRunning, err := d.IsRunning(ctx, newService)
+		retry := 10
+		for retry > 0 && (err == nil && !isRunning) {
+			time.Sleep(100 * time.Millisecond)
+			isRunning, err = d.IsRunning(ctx, newService)
+			retry--
+		}
+		if err != nil {
+			return err
+		}
+
 		newServices = append(newServices, newService)
 
 		for _, volume := range config.VolumeBindings() {
@@ -112,6 +124,11 @@ func (d *dockerExecutor) Run(ctx context.Context, configs ...model.ServiceConfig
 		}
 
 		args := []string{"run", "--rm", "-dit"}
+
+		for _, env := range config.Environments() {
+			args = append(args, "-e")
+			args = append(args, env)
+		}
 
 		for _, port := range config.PortBindings() {
 			args = append(args, "-p")

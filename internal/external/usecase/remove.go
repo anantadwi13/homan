@@ -147,7 +147,9 @@ func (u *ucRemove) postExecute(ctx context.Context, config model.ServiceConfig) 
 				return err
 			}
 
-			for _, rule := range rules.Payload.Data {
+			for i := len(rules.Payload.Data) - 1; i >= 0; i-- {
+				// Reverse deletion
+				rule := rules.Payload.Data[i]
 				if rule.Name == config.Name() {
 					_, _, err = haproxyClient.BackendSwitchingRule.DeleteBackendSwitchingRule(
 						backend_switching_rule.NewDeleteBackendSwitchingRuleParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName).WithIndex(*rule.Index),
@@ -169,7 +171,9 @@ func (u *ucRemove) postExecute(ctx context.Context, config model.ServiceConfig) 
 				return err
 			}
 
-			for _, rule := range requestRules.Payload.Data {
+			for i := len(requestRules.Payload.Data) - 1; i >= 0; i-- {
+				// Reverse deletion
+				rule := requestRules.Payload.Data[i]
 				if strings.Contains(rule.CondTest, config.DomainName()) {
 					_, _, err = haproxyClient.HTTPRequestRule.DeleteHTTPRequestRule(
 						http_request_rule.NewDeleteHTTPRequestRuleParams().WithParentType("frontend").WithParentName(mainFrontendName).WithTransactionID(transactionId).WithIndex(*rule.Index),
