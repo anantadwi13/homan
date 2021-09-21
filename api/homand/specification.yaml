@@ -1,0 +1,78 @@
+openapi: 3.0.3
+info:
+  title: homand
+  description: Homan Daemon API Specification
+  version: 0.0.0
+servers:
+  - url: 'http://{hostname}'
+    variables:
+      hostname:
+        default: localhost
+paths:
+  /check/health:
+    get:
+      operationId: checkHealth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ check_type,address ]
+              properties:
+                check_type:
+                  type: string
+                  enum: [ tcp,http ]
+                  example: http
+                address:
+                  type: string
+                  example: http://server/health
+      responses:
+        200:
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/check-health-res"
+        400:
+          $ref: "#/components/responses/bad-request"
+        default:
+          $ref: "#/components/responses/default-error"
+
+components:
+  schemas:
+    check-health-res:
+      type: object
+      required: [ is_available ]
+      properties:
+        is_available:
+          type: boolean
+    general-res:
+      title: General Response
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+  responses:
+    bad-request:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/general-res'
+    not-found:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/general-res'
+    default-error:
+      description: General error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/general-res'
