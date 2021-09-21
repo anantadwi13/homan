@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/anantadwi13/cli-whm/internal/homan/domain"
-	"github.com/anantadwi13/cli-whm/internal/homan/domain/model"
-	"github.com/anantadwi13/cli-whm/internal/homan/domain/service"
-	"github.com/anantadwi13/cli-whm/internal/homan/external/service/dto"
+	"github.com/anantadwi13/homan/internal/homan/domain"
+	"github.com/anantadwi13/homan/internal/homan/domain/model"
+	"github.com/anantadwi13/homan/internal/homan/domain/service"
+	"github.com/anantadwi13/homan/internal/homan/external/service/dto"
 	"time"
 )
 

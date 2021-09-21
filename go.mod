@@ -1,4 +1,4 @@
-module github.com/anantadwi13/cli-whm
+module github.com/anantadwi13/homan
 
 go 1.17
 

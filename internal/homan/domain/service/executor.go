@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/anantadwi13/cli-whm/internal/homan/domain/model"
+	"github.com/anantadwi13/homan/internal/homan/domain/model"
 )
 
 var (

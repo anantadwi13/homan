@@ -7,7 +7,7 @@ package log_target
 
 import (
 	"context"
-	"github.com/anantadwi13/cli-whm/internal/homan/external/api/haproxy/models"
+	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/models"
 	"net/http"
 	"time"
 

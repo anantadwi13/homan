@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"github.com/anantadwi13/cli-whm/internal/util"
+	"github.com/anantadwi13/homan/internal/util"
 )
 
 type Commander interface {

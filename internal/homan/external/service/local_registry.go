@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"github.com/anantadwi13/cli-whm/internal/homan/domain"
-	"github.com/anantadwi13/cli-whm/internal/homan/domain/model"
-	"github.com/anantadwi13/cli-whm/internal/homan/domain/service"
-	dto2 "github.com/anantadwi13/cli-whm/internal/homan/external/service/dto"
+	"github.com/anantadwi13/homan/internal/homan/domain"
+	"github.com/anantadwi13/homan/internal/homan/domain/model"
+	"github.com/anantadwi13/homan/internal/homan/domain/service"
+	dto2 "github.com/anantadwi13/homan/internal/homan/external/service/dto"
 	"io/fs"
 )
 

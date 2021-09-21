@@ -1,7 +1,7 @@
 package haproxy
 
 import (
-	"github.com/anantadwi13/cli-whm/internal/homan/external/api/haproxy/client"
+	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client"
 	"github.com/go-openapi/runtime"
 	httptransport "github.com/go-openapi/runtime/client"
 	"net/http"

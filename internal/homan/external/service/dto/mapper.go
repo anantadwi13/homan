@@ -2,7 +2,7 @@ package dto
 
 import (
 	"errors"
-	model2 "github.com/anantadwi13/cli-whm/internal/homan/domain/model"
+	model2 "github.com/anantadwi13/homan/internal/homan/domain/model"
 	"strconv"
 	"strings"
 )

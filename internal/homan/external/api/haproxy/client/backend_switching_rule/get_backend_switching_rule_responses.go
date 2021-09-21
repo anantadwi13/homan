@@ -8,7 +8,7 @@ package backend_switching_rule
 import (
 	"context"
 	"fmt"
-	models2 "github.com/anantadwi13/cli-whm/internal/homan/external/api/haproxy/models"
+	models2 "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/models"
 	"io"
 
 	"github.com/go-openapi/errors"

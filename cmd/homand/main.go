@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"github.com/anantadwi13/cli-whm/internal/homand"
+	"github.com/anantadwi13/homan/internal/homand"
 	"github.com/labstack/echo/v4"
 	"net/http"
 	"os"

@@ -8,11 +8,11 @@ package homan
 
 import (
 	"embed"
-	"github.com/anantadwi13/cli-whm/internal/homan/domain"
-	service3 "github.com/anantadwi13/cli-whm/internal/homan/domain/service"
-	usecase3 "github.com/anantadwi13/cli-whm/internal/homan/domain/usecase"
-	"github.com/anantadwi13/cli-whm/internal/homan/external/service"
-	"github.com/anantadwi13/cli-whm/internal/homan/external/usecase"
+	"github.com/anantadwi13/homan/internal/homan/domain"
+	service3 "github.com/anantadwi13/homan/internal/homan/domain/service"
+	usecase3 "github.com/anantadwi13/homan/internal/homan/domain/usecase"
+	"github.com/anantadwi13/homan/internal/homan/external/service"
+	"github.com/anantadwi13/homan/internal/homan/external/usecase"
 	"github.com/google/wire"
 )
 

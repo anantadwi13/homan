@@ -7,7 +7,7 @@ package storage
 
 import (
 	"fmt"
-	"github.com/anantadwi13/cli-whm/internal/homan/external/api/haproxy/models"
+	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/models"
 	"io"
 
 	"github.com/go-openapi/runtime"

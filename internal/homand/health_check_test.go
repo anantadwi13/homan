@@ -2,6 +2,7 @@ package homand
 
 import (
 	"context"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"testing"
@@ -9,6 +10,8 @@ import (
 
 func TestHealthChecker(t *testing.T) {
 	hc := NewHealthChecker()
+
+	host := "localhost:32100"
 
 	http.HandleFunc("/ok", func(rw http.ResponseWriter, req *http.Request) {
 		_, _ = rw.Write([]byte("ok"))
@@ -25,7 +28,7 @@ func TestHealthChecker(t *testing.T) {
 		rw.WriteHeader(500)
 		_, _ = rw.Write([]byte("error"))
 	})
-	httpServer := http.Server{Addr: "localhost:32132", Handler: http.DefaultServeMux}
+	httpServer := http.Server{Addr: host, Handler: http.DefaultServeMux}
 	go func() {
 		err := httpServer.ListenAndServe()
 		if err != http.ErrServerClosed {
@@ -34,19 +37,19 @@ func TestHealthChecker(t *testing.T) {
 	}()
 	defer httpServer.Shutdown(context.TODO())
 
-	isAvailable, err := hc.IsAvailable(context.TODO(), HealthCheckHTTP, "http://localhost:32132/ok")
+	isAvailable, err := hc.IsAvailable(context.TODO(), HealthCheckHTTP, fmt.Sprintf("http://%v/ok", host))
 	assert.Nil(t, err)
 	assert.True(t, isAvailable)
-	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckHTTP, "http://localhost:32132/ok2")
+	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckHTTP, fmt.Sprintf("http://%v/ok2", host))
 	assert.Nil(t, err)
 	assert.True(t, isAvailable)
-	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckHTTP, "http://localhost:32132/error")
+	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckHTTP, fmt.Sprintf("http://%v/error", host))
 	assert.Nil(t, err)
 	assert.False(t, isAvailable)
-	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckHTTP, "http://localhost:32132/error2")
+	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckHTTP, fmt.Sprintf("http://%v/error2", host))
 	assert.Nil(t, err)
 	assert.False(t, isAvailable)
-	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckTCP, "localhost:32132")
+	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckTCP, host)
 	assert.Nil(t, err)
 	assert.True(t, isAvailable)
 	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckTCP, "localhost:32133")

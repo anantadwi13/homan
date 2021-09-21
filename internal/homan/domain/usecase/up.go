@@ -2,12 +2,12 @@ package usecase
 
 import (
 	"context"
-	model2 "github.com/anantadwi13/cli-whm/internal/homan/domain/model"
-	service2 "github.com/anantadwi13/cli-whm/internal/homan/domain/service"
-	"github.com/anantadwi13/cli-whm/internal/homan/external/api/haproxy"
-	"github.com/anantadwi13/cli-whm/internal/homan/external/api/haproxy/client/configuration"
-	transactions2 "github.com/anantadwi13/cli-whm/internal/homan/external/api/haproxy/client/transactions"
-	"github.com/anantadwi13/cli-whm/internal/util"
+	model2 "github.com/anantadwi13/homan/internal/homan/domain/model"
+	service2 "github.com/anantadwi13/homan/internal/homan/domain/service"
+	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy"
+	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/configuration"
+	transactions2 "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/transactions"
+	"github.com/anantadwi13/homan/internal/util"
 )
 
 type UcUpParams struct {

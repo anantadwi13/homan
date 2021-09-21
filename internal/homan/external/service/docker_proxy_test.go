@@ -2,9 +2,9 @@ package service
 
 import (
 	"context"
-	"github.com/anantadwi13/cli-whm/internal/homan/domain"
-	model2 "github.com/anantadwi13/cli-whm/internal/homan/domain/model"
-	service2 "github.com/anantadwi13/cli-whm/internal/homan/domain/service"
+	"github.com/anantadwi13/homan/internal/homan/domain"
+	model2 "github.com/anantadwi13/homan/internal/homan/domain/model"
+	service2 "github.com/anantadwi13/homan/internal/homan/domain/service"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"testing"

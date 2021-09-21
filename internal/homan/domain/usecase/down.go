@@ -2,7 +2,7 @@ package usecase
 
 import (
 	"context"
-	service2 "github.com/anantadwi13/cli-whm/internal/homan/domain/service"
+	service2 "github.com/anantadwi13/homan/internal/homan/domain/service"
 )
 
 type UcDownParams struct {
