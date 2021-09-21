@@ -20,6 +20,7 @@ import (
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/storage"
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/transactions"
 	haproxyModel "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/models"
+	"github.com/anantadwi13/homan/internal/homan/external/service"
 	"github.com/anantadwi13/homan/internal/util"
 	"github.com/go-openapi/runtime"
 	"path/filepath"
@@ -31,18 +32,27 @@ type ucAdd struct {
 	registry    domainService.Registry
 	executor    domainService.Executor
 	proxy       domainService.Proxy
+	cmd         service.Commander
 	regexDomain *regexp.Regexp
 }
 
 func NewUcAdd(
 	config domain.Config, registry domainService.Registry, executor domainService.Executor, proxy domainService.Proxy,
+	commander service.Commander,
 ) usecase.UcAdd {
 	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
 	if err != nil {
 		// todo handle error
 		return nil
 	}
-	return &ucAdd{config, registry, executor, proxy, reg}
+	return &ucAdd{
+		config:      config,
+		registry:    registry,
+		executor:    executor,
+		proxy:       proxy,
+		cmd:         commander,
+		regexDomain: reg,
+	}
 }
 
 func (u *ucAdd) Execute(ctx context.Context, params *usecase.UcAddParams) usecase.Error {
@@ -54,9 +64,9 @@ func (u *ucAdd) Execute(ctx context.Context, params *usecase.UcAddParams) usecas
 	var config domainModel.ServiceConfig
 	switch params.ServiceType {
 	case usecase.ServiceTypeBlog:
-		dbName, err := u.getDbName(params.Domain)
-		if err != nil {
-			return usecase.WrapErrorSystem(err)
+		dbName := u.getDbName(params.Domain)
+		if dbName == "" {
+			return usecase.NewErrorSystem("cannot assign database name")
 		}
 
 		config = domainModel.NewServiceConfig(
@@ -162,7 +172,12 @@ func (u *ucAdd) postExecute(
 	}
 
 	// Add Database
-	// todo
+	cmdRes, err := u.cmd.RunCommand(ctx, "docker", "run", "--rm", "--network", u.config.ProjectName(),
+		"mysql:8", "mysql", "-u", "root", "-pmy-secret-pw", "-h", "system-mysql", "-e",
+		fmt.Sprintf("create database if not exists %v", u.getDbName(config.DomainName())))
+	if err != nil {
+		return usecase.NewErrorSystem(string(cmdRes))
+	}
 
 	services, err := u.registry.GetSystemServiceByTag(ctx, domainModel.TagGateway)
 	if err != nil {
@@ -413,6 +428,6 @@ func (u *ucAdd) postExecute(
 	return nil
 }
 
-func (u *ucAdd) getDbName(domainName string) (string, error) {
-	return u.regexDomain.ReplaceAllString(domainName, "_"), nil
+func (u *ucAdd) getDbName(domainName string) string {
+	return u.regexDomain.ReplaceAllString(domainName, "_")
 }

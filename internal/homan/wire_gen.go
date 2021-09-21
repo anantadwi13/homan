@@ -9,28 +9,28 @@ package homan
 import (
 	"embed"
 	"github.com/anantadwi13/homan/internal/homan/domain"
-	service3 "github.com/anantadwi13/homan/internal/homan/domain/service"
-	usecase3 "github.com/anantadwi13/homan/internal/homan/domain/usecase"
-	"github.com/anantadwi13/homan/internal/homan/external/service"
-	"github.com/anantadwi13/homan/internal/homan/external/usecase"
+	"github.com/anantadwi13/homan/internal/homan/domain/service"
+	"github.com/anantadwi13/homan/internal/homan/domain/usecase"
+	service2 "github.com/anantadwi13/homan/internal/homan/external/service"
+	usecase2 "github.com/anantadwi13/homan/internal/homan/external/usecase"
 	"github.com/google/wire"
 )
 
 // Injectors from app.go:
 
 func NewApp(config domain.Config) App {
-	storage := service3.NewStorage()
-	registry := service.NewLocalRegistry(config, storage)
-	commander := service.NewCommander()
-	executor := service.NewDockerExecutor(config, commander, registry, storage)
+	storage := service.NewStorage()
+	registry := service2.NewLocalRegistry(config, storage)
+	commander := service2.NewCommander()
+	executor := service2.NewDockerExecutor(config, commander, registry, storage)
 	fs := _wireFSValue
-	proxy := service.NewDockerProxy(config, executor)
-	ucUp := usecase3.NewUcUp(registry, executor, proxy)
-	ucInit := usecase.NewUcInit(registry, executor, config, storage, fs, ucUp, proxy)
-	ucDown := usecase3.NewUcDown(registry, executor)
-	ucAdd := usecase.NewUcAdd(config, registry, executor, proxy)
-	ucRemove := usecase.NewUcRemove(config, registry, executor, proxy)
-	internalUseCases := useCases{
+	proxy := service2.NewDockerProxy(config, executor)
+	ucUp := usecase.NewUcUp(registry, executor, proxy)
+	ucInit := usecase2.NewUcInit(registry, executor, config, storage, fs, ucUp, proxy)
+	ucDown := usecase.NewUcDown(registry, executor)
+	ucAdd := usecase2.NewUcAdd(config, registry, executor, proxy, commander)
+	ucRemove := usecase2.NewUcRemove(config, registry, executor, proxy)
+	homanUseCases := useCases{
 		Init:   ucInit,
 		Up:     ucUp,
 		Down:   ucDown,
@@ -38,7 +38,7 @@ func NewApp(config domain.Config) App {
 		Remove: ucRemove,
 	}
 	app := App{
-		UseCases: internalUseCases,
+		UseCases: homanUseCases,
 		Config:   config,
 	}
 	return app
@@ -55,28 +55,28 @@ var (
 	Templates embed.FS
 )
 
-var useCasesSet = wire.NewSet(usecase.NewUcInit, usecase3.NewUcUp, usecase3.NewUcDown, usecase.NewUcAdd, usecase.NewUcRemove, wire.Struct(new(useCases), "Init", "Up", "Down", "Add", "Remove"))
+var useCasesSet = wire.NewSet(usecase2.NewUcInit, usecase.NewUcUp, usecase.NewUcDown, usecase2.NewUcAdd, usecase2.NewUcRemove, wire.Struct(new(useCases), "Init", "Up", "Down", "Add", "Remove"))
 
-var serviceSet = wire.NewSet(service.NewCommander, service.NewLocalRegistry, service.NewDockerExecutor, service3.NewStorage, service.NewDockerProxy, wire.Struct(new(services), "Commander", "Executor", "Registry", "Storage", "Proxy"))
+var serviceSet = wire.NewSet(service2.NewCommander, service2.NewLocalRegistry, service2.NewDockerExecutor, service.NewStorage, service2.NewDockerProxy, wire.Struct(new(services), "Commander", "Executor", "Registry", "Storage", "Proxy"))
 
 var applicationSet = wire.NewSet(
 	useCasesSet, wire.Value(Templates), wire.Struct(new(App), "UseCases", "Config"),
 )
 
 type useCases struct {
-	Init   usecase3.UcInit
-	Up     usecase3.UcUp
-	Down   usecase3.UcDown
-	Add    usecase3.UcAdd
-	Remove usecase3.UcRemove
+	Init   usecase.UcInit
+	Up     usecase.UcUp
+	Down   usecase.UcDown
+	Add    usecase.UcAdd
+	Remove usecase.UcRemove
 }
 
 type services struct {
-	Commander service.Commander
-	Executor  service3.Executor
-	Registry  service3.Registry
-	Storage   service3.Storage
-	Proxy     service3.Proxy
+	Commander service2.Commander
+	Executor  service.Executor
+	Registry  service.Registry
+	Storage   service.Storage
+	Proxy     service.Proxy
 }
 
 type App struct {
