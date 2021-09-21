@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestHealthChecker(t *testing.T) {
@@ -36,6 +37,8 @@ func TestHealthChecker(t *testing.T) {
 		}
 	}()
 	defer httpServer.Shutdown(context.TODO())
+
+	time.Sleep(2 * time.Second)
 
 	isAvailable, err := hc.IsAvailable(context.TODO(), HealthCheckHTTP, fmt.Sprintf("http://%v/ok", host))
 	assert.Nil(t, err)
