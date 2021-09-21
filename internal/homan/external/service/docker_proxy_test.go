@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"github.com/anantadwi13/homan/internal/homan/domain"
 	"github.com/anantadwi13/homan/internal/homan/domain/model"
 	"github.com/anantadwi13/homan/internal/homan/domain/service"
 	"github.com/stretchr/testify/assert"
+	"net"
 	"net/http"
 	"testing"
 )
@@ -59,29 +61,56 @@ func TestDockerProxy(t *testing.T) {
 		_ = de2.Stop(context.TODO(), r2.GetCoreDaemon(context.TODO()))
 	}()
 
-	err = proxy.Execute(context.TODO(), func(proxy *model.ProxyDetail) error {
-		client := http.DefaultClient
-
-		// Call nginx, should return OK
-		request, err := http.NewRequest(http.MethodGet, proxy.FullPath, nil)
-		assert.Nil(t, err)
-		request.Header.Add("X-Target-Host", "http://test-container")
-		response, err := client.Do(request)
-		assert.Nil(t, err)
-		assert.Equal(t, http.StatusOK, response.StatusCode)
-
-		err = de2.Stop(context.TODO(), nginx)
-		assert.Nil(t, err)
-
-		// Call nginx, should return Not OK (Internal Server Error)
-		request, err = http.NewRequest(http.MethodGet, proxy.FullPath, nil)
-		assert.Nil(t, err)
-		request.Header.Add("X-Target-Host", "http://test-container")
-		response, err = client.Do(request)
-		assert.Nil(t, err)
-		assert.Equal(t, http.StatusBadGateway, response.StatusCode)
-
-		return nil
+	proxyTCP, stopTCP, err := proxy.Start(context.TODO(), service.ProxyParams{
+		Type:        model.ProxyTCP,
+		TCPHostname: nginx.Name(),
+		TCPPort:     80,
 	})
 	assert.Nil(t, err)
+	assert.True(t, proxyTCP.IsRunning)
+	defer stopTCP()
+
+	proxyHTTP, stopHTTP, err := proxy.Start(context.TODO(), service.ProxyParams{Type: model.ProxyHTTP})
+	assert.Nil(t, err)
+	assert.True(t, proxyHTTP.IsRunning)
+	defer stopHTTP()
+
+	client := http.DefaultClient
+
+	// Call nginx, should return OK
+	request, err := http.NewRequest(http.MethodGet, proxyHTTP.FullScheme, nil)
+	assert.Nil(t, err)
+	request.Header.Add("X-Target-Host", "http://test-container")
+	response, err := client.Do(request)
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+
+	request, err = http.NewRequest(http.MethodGet, fmt.Sprintf("http://%v/", proxyTCP.FullScheme), nil)
+	assert.Nil(t, err)
+	response, err = client.Do(request)
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+
+	// Stop nginx
+	err = de2.Stop(context.TODO(), nginx)
+	assert.Nil(t, err)
+
+	// Call nginx, should return Not OK (Internal Server Error)
+	request, err = http.NewRequest(http.MethodGet, proxyHTTP.FullScheme, nil)
+	assert.Nil(t, err)
+	request.Header.Add("X-Target-Host", "http://test-container")
+	response, err = client.Do(request)
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusBadGateway, response.StatusCode)
+
+	dial, err := net.Dial("tcp", proxyTCP.Host)
+	assert.Nil(t, err)
+	assert.NotNil(t, dial)
+	err = dial.Close()
+	assert.Nil(t, err)
+
+	_ = stopHTTP()
+	_ = stopTCP()
+	assert.False(t, proxyHTTP.IsRunning)
+	assert.False(t, proxyTCP.IsRunning)
 }

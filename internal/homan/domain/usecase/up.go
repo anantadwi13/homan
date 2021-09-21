@@ -69,35 +69,32 @@ func (u *ucUp) Execute(ctx context.Context, params *UcUpParams) Error {
 	}
 	haproxyService := services[0]
 
-	err = u.proxy.Execute(ctx, func(proxy *domainModel.ProxyDetail) error {
+	proxy, stop, err := u.proxy.Start(ctx, domainService.ProxyParams{Type: domainModel.ProxyHTTP})
+	if err != nil {
+		return WrapErrorSystem(err)
+	}
+	defer stop()
 
-		// Force Reload HAProxy
+	// Force Reload HAProxy
 
-		haproxyClient, auth := haproxy.NewHaproxyClient(proxy.Host, haproxyService.Name()+":5555")
+	haproxyClient, auth := haproxy.NewHaproxyClient(proxy.Host, haproxyService.Name()+":5555")
 
-		version, err := haproxyClient.Configuration.GetConfigurationVersion(configuration.NewGetConfigurationVersionParams(), auth)
-		if err != nil {
-			return err
-		}
+	version, err := haproxyClient.Configuration.GetConfigurationVersion(configuration.NewGetConfigurationVersionParams(), auth)
+	if err != nil {
+		return WrapErrorSystem(err)
+	}
 
-		transaction, err := haproxyClient.Transactions.StartTransaction(transactions.NewStartTransactionParams().WithVersion(version.Payload), auth)
-		if err != nil {
-			return err
-		}
+	transaction, err := haproxyClient.Transactions.StartTransaction(transactions.NewStartTransactionParams().WithVersion(version.Payload), auth)
+	if err != nil {
+		return WrapErrorSystem(err)
+	}
 
-		transactionId := &transaction.Payload.ID
+	transactionId := &transaction.Payload.ID
 
-		_, _, err = haproxyClient.Transactions.CommitTransaction(
-			transactions.NewCommitTransactionParams().WithID(*transactionId).WithForceReload(util.Bool(true)),
-			auth,
-		)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-
+	_, _, err = haproxyClient.Transactions.CommitTransaction(
+		transactions.NewCommitTransactionParams().WithID(*transactionId).WithForceReload(util.Bool(true)),
+		auth,
+	)
 	if err != nil {
 		return WrapErrorSystem(err)
 	}

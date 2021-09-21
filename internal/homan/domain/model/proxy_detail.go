@@ -1,6 +1,15 @@
 package model
 
+type ProxyType string
+
+const (
+	ProxyTCP  = ProxyType("tcp")
+	ProxyHTTP = ProxyType("http")
+)
+
 type ProxyDetail struct {
-	Host     string // example : localhost:5555
-	FullPath string // example : http://localhost:5555/
+	Type       ProxyType
+	IsRunning  bool
+	Host       string // example : localhost:5555
+	FullScheme string // example : http://localhost:5555/
 }

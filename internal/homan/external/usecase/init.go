@@ -126,123 +126,123 @@ func (u *ucInit) postExecute(
 		return err2
 	}
 
-	err = u.proxy.Execute(ctx, func(proxy *domainModel.ProxyDetail) error {
-		haproxyClient, auth := haproxy.NewHaproxyClient(proxy.Host, services["haproxy"].Name()+":5555")
-
-		version, err := haproxyClient.Configuration.GetConfigurationVersion(configuration.NewGetConfigurationVersionParams(), auth)
-		if err != nil {
-			return err
-		}
-
-		transaction, err := haproxyClient.Transactions.StartTransaction(transactions.NewStartTransactionParams().WithVersion(version.Payload), auth)
-		if err != nil {
-			return err
-		}
-
-		transactionId := &transaction.Payload.ID
-
-		mainBackend := &haproxyModel.Backend{
-			Name: u.config.ProjectName(),
-			Mode: "http",
-		}
-
-		certmanBackend := &haproxyModel.Backend{
-			Name:       services["certman"].Name(),
-			Mode:       "http",
-			Forwardfor: &haproxyModel.Forwardfor{Enabled: util.String("enabled")},
-			Balance:    &haproxyModel.Balance{Algorithm: util.String("roundrobin")},
-		}
-
-		certmanServer := &haproxyModel.Server{
-			Name:    "server1",
-			Address: services["certman"].Name(),
-			Port:    util.Int64(80),
-			Check:   "enabled",
-		}
-
-		certmanBackendRule := &haproxyModel.BackendSwitchingRule{
-			Index:    util.Int64(0),
-			Name:     certmanBackend.Name,
-			Cond:     "if",
-			CondTest: "{ path_beg /.well-known }",
-		}
-
-		mainFrontend := &haproxyModel.Frontend{
-			Mode:           "http",
-			Name:           u.config.ProjectName(),
-			DefaultBackend: mainBackend.Name,
-		}
-
-		mainBind := &haproxyModel.Bind{
-			Address: "*",
-			Name:    "http",
-			Port:    util.Int64(80),
-		}
-
-		mainSecureBind := &haproxyModel.Bind{
-			Address:        "*",
-			Name:           "https",
-			Port:           util.Int64(443),
-			Ssl:            true,
-			SslCertificate: "/etc/haproxy/ssl/",
-		}
-
-		// Create Main Backend
-
-		_, _, err = haproxyClient.Backend.CreateBackend(backend.NewCreateBackendParams().WithTransactionID(transactionId).WithData(mainBackend), auth)
-		if err != nil {
-			return err
-		}
-
-		// Create Certman Backend
-
-		_, _, err = haproxyClient.Backend.CreateBackend(backend.NewCreateBackendParams().WithTransactionID(transactionId).WithData(certmanBackend), auth)
-		if err != nil {
-			return err
-		}
-
-		_, _, err = haproxyClient.Server.CreateServer(server.NewCreateServerParams().WithTransactionID(transactionId).WithBackend(certmanBackend.Name).WithData(certmanServer), auth)
-		if err != nil {
-			return err
-		}
-
-		// Create Main Frontend
-
-		_, _, err = haproxyClient.Frontend.CreateFrontend(frontend.NewCreateFrontendParams().WithData(mainFrontend).WithTransactionID(transactionId), auth)
-		if err != nil {
-			return err
-		}
-
-		_, _, err = haproxyClient.Bind.CreateBind(bind.NewCreateBindParams().WithTransactionID(transactionId).WithData(mainBind).WithFrontend(mainFrontend.Name), auth)
-		if err != nil {
-			return err
-		}
-
-		_, _, err = haproxyClient.Bind.CreateBind(bind.NewCreateBindParams().WithTransactionID(transactionId).WithData(mainSecureBind).WithFrontend(mainFrontend.Name), auth)
-		if err != nil {
-			return err
-		}
-
-		// Create Certman Backend Rule
-
-		_, _, err = haproxyClient.BackendSwitchingRule.CreateBackendSwitchingRule(
-			backend_switching_rule.NewCreateBackendSwitchingRuleParams().WithTransactionID(transactionId).WithFrontend(mainFrontend.Name).WithData(certmanBackendRule),
-			auth,
-		)
-		if err != nil {
-			return err
-		}
-
-		_, _, err = haproxyClient.Transactions.CommitTransaction(transactions.NewCommitTransactionParams().WithID(*transactionId), auth)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
+	proxy, stop, err := u.proxy.Start(ctx, service.ProxyParams{Type: domainModel.ProxyHTTP})
 	if err != nil {
 		return usecase.WrapErrorSystem(err)
 	}
+	defer stop()
+
+	haproxyClient, auth := haproxy.NewHaproxyClient(proxy.Host, services["haproxy"].Name()+":5555")
+
+	version, err := haproxyClient.Configuration.GetConfigurationVersion(configuration.NewGetConfigurationVersionParams(), auth)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
+	}
+
+	transaction, err := haproxyClient.Transactions.StartTransaction(transactions.NewStartTransactionParams().WithVersion(version.Payload), auth)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
+	}
+
+	transactionId := &transaction.Payload.ID
+
+	mainBackend := &haproxyModel.Backend{
+		Name: u.config.ProjectName(),
+		Mode: "http",
+	}
+
+	certmanBackend := &haproxyModel.Backend{
+		Name:       services["certman"].Name(),
+		Mode:       "http",
+		Forwardfor: &haproxyModel.Forwardfor{Enabled: util.String("enabled")},
+		Balance:    &haproxyModel.Balance{Algorithm: util.String("roundrobin")},
+	}
+
+	certmanServer := &haproxyModel.Server{
+		Name:    "server1",
+		Address: services["certman"].Name(),
+		Port:    util.Int64(80),
+		Check:   "enabled",
+	}
+
+	certmanBackendRule := &haproxyModel.BackendSwitchingRule{
+		Index:    util.Int64(0),
+		Name:     certmanBackend.Name,
+		Cond:     "if",
+		CondTest: "{ path_beg /.well-known }",
+	}
+
+	mainFrontend := &haproxyModel.Frontend{
+		Mode:           "http",
+		Name:           u.config.ProjectName(),
+		DefaultBackend: mainBackend.Name,
+	}
+
+	mainBind := &haproxyModel.Bind{
+		Address: "*",
+		Name:    "http",
+		Port:    util.Int64(80),
+	}
+
+	mainSecureBind := &haproxyModel.Bind{
+		Address:        "*",
+		Name:           "https",
+		Port:           util.Int64(443),
+		Ssl:            true,
+		SslCertificate: "/etc/haproxy/ssl/",
+	}
+
+	// Create Main Backend
+
+	_, _, err = haproxyClient.Backend.CreateBackend(backend.NewCreateBackendParams().WithTransactionID(transactionId).WithData(mainBackend), auth)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
+	}
+
+	// Create Certman Backend
+
+	_, _, err = haproxyClient.Backend.CreateBackend(backend.NewCreateBackendParams().WithTransactionID(transactionId).WithData(certmanBackend), auth)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
+	}
+
+	_, _, err = haproxyClient.Server.CreateServer(server.NewCreateServerParams().WithTransactionID(transactionId).WithBackend(certmanBackend.Name).WithData(certmanServer), auth)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
+	}
+
+	// Create Main Frontend
+
+	_, _, err = haproxyClient.Frontend.CreateFrontend(frontend.NewCreateFrontendParams().WithData(mainFrontend).WithTransactionID(transactionId), auth)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
+	}
+
+	_, _, err = haproxyClient.Bind.CreateBind(bind.NewCreateBindParams().WithTransactionID(transactionId).WithData(mainBind).WithFrontend(mainFrontend.Name), auth)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
+	}
+
+	_, _, err = haproxyClient.Bind.CreateBind(bind.NewCreateBindParams().WithTransactionID(transactionId).WithData(mainSecureBind).WithFrontend(mainFrontend.Name), auth)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
+	}
+
+	// Create Certman Backend Rule
+
+	_, _, err = haproxyClient.BackendSwitchingRule.CreateBackendSwitchingRule(
+		backend_switching_rule.NewCreateBackendSwitchingRuleParams().WithTransactionID(transactionId).WithFrontend(mainFrontend.Name).WithData(certmanBackendRule),
+		auth,
+	)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
+	}
+
+	_, _, err = haproxyClient.Transactions.CommitTransaction(transactions.NewCommitTransactionParams().WithID(*transactionId), auth)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
+	}
+
 	return nil
 }
 

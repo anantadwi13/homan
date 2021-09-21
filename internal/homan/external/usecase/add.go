@@ -192,222 +192,222 @@ func (u *ucAdd) postExecute(
 	certmanService := services[0]
 
 	if config.DomainName() != "" {
-		err = u.proxy.Execute(ctx, func(proxy *domainModel.ProxyDetail) error {
-
-			// Add Haproxy Backend
-
-			haproxyClient, auth := haproxy.NewHaproxyClient(proxy.Host, haproxyService.Name()+":5555")
-
-			version, err := haproxyClient.Configuration.GetConfigurationVersion(configuration.NewGetConfigurationVersionParams(), auth)
-			if err != nil {
-				return err
-			}
-
-			transaction, err := haproxyClient.Transactions.StartTransaction(transactions.NewStartTransactionParams().WithVersion(version.Payload), auth)
-			if err != nil {
-				return err
-			}
-
-			transactionId := &transaction.Payload.ID
-			mainFrontendName := u.config.ProjectName()
-
-			rules, err := haproxyClient.BackendSwitchingRule.GetBackendSwitchingRules(
-				backend_switching_rule.NewGetBackendSwitchingRulesParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName),
-				auth,
-			)
-			if err != nil {
-				return err
-			}
-			requestRulesRes, err := haproxyClient.HTTPRequestRule.GetHTTPRequestRules(
-				http_request_rule.NewGetHTTPRequestRulesParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName),
-				auth,
-			)
-			if err != nil {
-				return err
-			}
-
-			backendRules := rules.Payload.Data
-			requestRules := requestRulesRes.Payload.Data
-
-			configBackend := &haproxyModel.Backend{
-				Name:       config.Name(),
-				Mode:       "http",
-				Forwardfor: &haproxyModel.Forwardfor{Enabled: util.String("enabled")},
-				Balance:    &haproxyModel.Balance{Algorithm: util.String("roundrobin")},
-			}
-
-			configServer := &haproxyModel.Server{
-				Name:    "server1",
-				Address: config.Name(),
-				Port:    util.Int64(80),
-				Check:   "enabled",
-			}
-
-			configBackendRule := &haproxyModel.BackendSwitchingRule{
-				Index:    util.Int64(int64(len(backendRules))),
-				Name:     configBackend.Name,
-				Cond:     "if",
-				CondTest: fmt.Sprintf("{ hdr(host) -i %v www.%v }", config.DomainName(), config.DomainName()),
-			}
-
-			configHttpRequestRule := &haproxyModel.HTTPRequestRule{
-				Index:      util.Int64(int64(len(requestRules))),
-				Type:       "redirect",
-				RedirType:  "scheme",
-				RedirValue: "https",
-				RedirCode:  util.Int64(302),
-				Cond:       "if",
-				CondTest:   fmt.Sprintf("{ hdr(host) -i %v www.%v } !{ ssl_fc }", config.DomainName(), config.DomainName()),
-			}
-
-			configHttpRequestHeaderRule := &haproxyModel.HTTPRequestRule{
-				Index:     util.Int64(int64(len(requestRules) + 1)),
-				Type:      "set-header",
-				HdrName:   "X-Forwarded-Proto",
-				HdrFormat: "https",
-				Cond:      "if",
-				CondTest:  fmt.Sprintf("{ hdr(host) -i %v www.%v }", config.DomainName(), config.DomainName()),
-			}
-
-			_, _, err = haproxyClient.Backend.CreateBackend(backend.NewCreateBackendParams().WithTransactionID(transactionId).WithData(configBackend), auth)
-			if err != nil {
-				return err
-			}
-
-			_, _, err = haproxyClient.Server.CreateServer(server.NewCreateServerParams().WithTransactionID(transactionId).WithBackend(configBackend.Name).WithData(configServer), auth)
-			if err != nil {
-				return err
-			}
-
-			_, _, err = haproxyClient.BackendSwitchingRule.CreateBackendSwitchingRule(
-				backend_switching_rule.NewCreateBackendSwitchingRuleParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName).WithData(configBackendRule),
-				auth,
-			)
-			if err != nil {
-				return err
-			}
-
-			_, _, err = haproxyClient.HTTPRequestRule.CreateHTTPRequestRule(
-				http_request_rule.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestRule),
-				auth,
-			)
-			if err != nil {
-				return err
-			}
-
-			_, _, err = haproxyClient.HTTPRequestRule.CreateHTTPRequestRule(
-				http_request_rule.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestHeaderRule),
-				auth,
-			)
-			if err != nil {
-				return err
-			}
-
-			_, _, err = haproxyClient.Transactions.CommitTransaction(transactions.NewCommitTransactionParams().WithID(*transactionId).WithForceReload(util.Bool(true)), auth)
-			if err != nil {
-				return err
-			}
-
-			// Add Domain Name
-			dnsClient, err := dns.NewDnsClient(proxy.FullPath, dnsService.Name()+":5555")
-			if err != nil {
-				return err
-			}
-
-			createZoneRes, err := dnsClient.CreateZoneWithResponse(ctx, dns.CreateZoneJSONRequestBody{
-				Domain:    config.DomainName(),
-				MailAddr:  fmt.Sprintf("root.%v.", config.DomainName()),
-				PrimaryNs: fmt.Sprintf("ns1.%v.", config.DomainName()),
-			})
-			if err != nil || createZoneRes.JSON201 == nil {
-				if err == nil {
-					err = errors.New("domain : unable to create zone")
-				}
-				return err
-			}
-
-			createRecordRes, err := dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
-				Name:  "ns1",
-				Type:  "A",
-				Value: u.config.PublicIP(),
-			})
-			if err != nil || createRecordRes.JSON201 == nil {
-				if err == nil {
-					err = errors.New("domain : unable to create record")
-				}
-				return err
-			}
-
-			createRecordRes, err = dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
-				Name:  "@",
-				Type:  "A",
-				Value: u.config.PublicIP(),
-			})
-			if err != nil || createRecordRes.JSON201 == nil {
-				if err == nil {
-					err = errors.New("domain : unable to create record")
-				}
-				return err
-			}
-
-			createRecordRes, err = dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
-				Name:  "www",
-				Type:  "A",
-				Value: u.config.PublicIP(),
-			})
-			if err != nil || createRecordRes.JSON201 == nil {
-				if err == nil {
-					err = errors.New("domain : unable to create record")
-				}
-				return err
-			}
-
-			// Add Certificate
-			certmanClient, err := certman.NewCertmanClient(proxy.FullPath, certmanService.Name()+":5555")
-			if err != nil {
-				return err
-			}
-
-			createCertificateRes, err := certmanClient.CreateCertificateWithResponse(ctx, certman.CreateCertificateJSONRequestBody{
-				Domain:     config.DomainName(),
-				Email:      fmt.Sprintf("admin@%v", config.DomainName()),
-				AltDomains: &[]string{fmt.Sprintf("www.%v", config.DomainName())},
-			})
-			if err != nil || createCertificateRes.JSON201 == nil {
-				if err == nil {
-					err = errors.New("certificate : unable to create ssl certificate")
-				}
-				return err
-			}
-
-			getCertificateRes, err := certmanClient.GetCertificateByDomainWithResponse(ctx, config.DomainName())
-			if err != nil || getCertificateRes.JSON200 == nil {
-				if err == nil {
-					err = errors.New("certificate : unable to get ssl certificate")
-				}
-				return err
-			}
-
-			sslRaw := fmt.Sprintf("%v\n%v", getCertificateRes.JSON200.PublicCert, getCertificateRes.JSON200.PrivateCert)
-
-			ssl := bytes.NewReader([]byte(sslRaw))
-
-			_, err = haproxyClient.Storage.CreateStorageSSLCertificate(
-				storage.NewCreateStorageSSLCertificateParams().WithFileUpload(runtime.NamedReader(
-					config.DomainName(),
-					ssl,
-				)).WithForceReload(util.Bool(true)),
-				auth,
-			)
-			if err != nil {
-				return err
-			}
-
-			return nil
-		})
+		proxy, stop, err := u.proxy.Start(ctx, domainService.ProxyParams{Type: domainModel.ProxyHTTP})
 		if err != nil {
 			return usecase.WrapErrorSystem(err)
 		}
+		defer stop()
+
+		// Add Haproxy Backend
+
+		haproxyClient, auth := haproxy.NewHaproxyClient(proxy.Host, haproxyService.Name()+":5555")
+
+		version, err := haproxyClient.Configuration.GetConfigurationVersion(configuration.NewGetConfigurationVersionParams(), auth)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		transaction, err := haproxyClient.Transactions.StartTransaction(transactions.NewStartTransactionParams().WithVersion(version.Payload), auth)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		transactionId := &transaction.Payload.ID
+		mainFrontendName := u.config.ProjectName()
+
+		rules, err := haproxyClient.BackendSwitchingRule.GetBackendSwitchingRules(
+			backend_switching_rule.NewGetBackendSwitchingRulesParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName),
+			auth,
+		)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+		requestRulesRes, err := haproxyClient.HTTPRequestRule.GetHTTPRequestRules(
+			http_request_rule.NewGetHTTPRequestRulesParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName),
+			auth,
+		)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		backendRules := rules.Payload.Data
+		requestRules := requestRulesRes.Payload.Data
+
+		configBackend := &haproxyModel.Backend{
+			Name:       config.Name(),
+			Mode:       "http",
+			Forwardfor: &haproxyModel.Forwardfor{Enabled: util.String("enabled")},
+			Balance:    &haproxyModel.Balance{Algorithm: util.String("roundrobin")},
+		}
+
+		configServer := &haproxyModel.Server{
+			Name:    "server1",
+			Address: config.Name(),
+			Port:    util.Int64(80),
+			Check:   "enabled",
+		}
+
+		configBackendRule := &haproxyModel.BackendSwitchingRule{
+			Index:    util.Int64(int64(len(backendRules))),
+			Name:     configBackend.Name,
+			Cond:     "if",
+			CondTest: fmt.Sprintf("{ hdr(host) -i %v www.%v }", config.DomainName(), config.DomainName()),
+		}
+
+		configHttpRequestRule := &haproxyModel.HTTPRequestRule{
+			Index:      util.Int64(int64(len(requestRules))),
+			Type:       "redirect",
+			RedirType:  "scheme",
+			RedirValue: "https",
+			RedirCode:  util.Int64(302),
+			Cond:       "if",
+			CondTest:   fmt.Sprintf("{ hdr(host) -i %v www.%v } !{ ssl_fc }", config.DomainName(), config.DomainName()),
+		}
+
+		configHttpRequestHeaderRule := &haproxyModel.HTTPRequestRule{
+			Index:     util.Int64(int64(len(requestRules) + 1)),
+			Type:      "set-header",
+			HdrName:   "X-Forwarded-Proto",
+			HdrFormat: "https",
+			Cond:      "if",
+			CondTest:  fmt.Sprintf("{ hdr(host) -i %v www.%v }", config.DomainName(), config.DomainName()),
+		}
+
+		_, _, err = haproxyClient.Backend.CreateBackend(backend.NewCreateBackendParams().WithTransactionID(transactionId).WithData(configBackend), auth)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		_, _, err = haproxyClient.Server.CreateServer(server.NewCreateServerParams().WithTransactionID(transactionId).WithBackend(configBackend.Name).WithData(configServer), auth)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		_, _, err = haproxyClient.BackendSwitchingRule.CreateBackendSwitchingRule(
+			backend_switching_rule.NewCreateBackendSwitchingRuleParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName).WithData(configBackendRule),
+			auth,
+		)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		_, _, err = haproxyClient.HTTPRequestRule.CreateHTTPRequestRule(
+			http_request_rule.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestRule),
+			auth,
+		)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		_, _, err = haproxyClient.HTTPRequestRule.CreateHTTPRequestRule(
+			http_request_rule.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestHeaderRule),
+			auth,
+		)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		_, _, err = haproxyClient.Transactions.CommitTransaction(transactions.NewCommitTransactionParams().WithID(*transactionId).WithForceReload(util.Bool(true)), auth)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		// Add Domain Name
+		dnsClient, err := dns.NewDnsClient(proxy.FullScheme, dnsService.Name()+":5555")
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		createZoneRes, err := dnsClient.CreateZoneWithResponse(ctx, dns.CreateZoneJSONRequestBody{
+			Domain:    config.DomainName(),
+			MailAddr:  fmt.Sprintf("root.%v.", config.DomainName()),
+			PrimaryNs: fmt.Sprintf("ns1.%v.", config.DomainName()),
+		})
+		if err != nil || createZoneRes.JSON201 == nil {
+			if err == nil {
+				err = errors.New("domain : unable to create zone")
+			}
+			return usecase.WrapErrorSystem(err)
+		}
+
+		createRecordRes, err := dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
+			Name:  "ns1",
+			Type:  "A",
+			Value: u.config.PublicIP(),
+		})
+		if err != nil || createRecordRes.JSON201 == nil {
+			if err == nil {
+				err = errors.New("domain : unable to create record")
+			}
+			return usecase.WrapErrorSystem(err)
+		}
+
+		createRecordRes, err = dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
+			Name:  "@",
+			Type:  "A",
+			Value: u.config.PublicIP(),
+		})
+		if err != nil || createRecordRes.JSON201 == nil {
+			if err == nil {
+				err = errors.New("domain : unable to create record")
+			}
+			return usecase.WrapErrorSystem(err)
+		}
+
+		createRecordRes, err = dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
+			Name:  "www",
+			Type:  "A",
+			Value: u.config.PublicIP(),
+		})
+		if err != nil || createRecordRes.JSON201 == nil {
+			if err == nil {
+				err = errors.New("domain : unable to create record")
+			}
+			return usecase.WrapErrorSystem(err)
+		}
+
+		// Add Certificate
+		certmanClient, err := certman.NewCertmanClient(proxy.FullScheme, certmanService.Name()+":5555")
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		createCertificateRes, err := certmanClient.CreateCertificateWithResponse(ctx, certman.CreateCertificateJSONRequestBody{
+			Domain:     config.DomainName(),
+			Email:      fmt.Sprintf("admin@%v", config.DomainName()),
+			AltDomains: &[]string{fmt.Sprintf("www.%v", config.DomainName())},
+		})
+		if err != nil || createCertificateRes.JSON201 == nil {
+			if err == nil {
+				err = errors.New("certificate : unable to create ssl certificate")
+			}
+			return usecase.WrapErrorSystem(err)
+		}
+
+		getCertificateRes, err := certmanClient.GetCertificateByDomainWithResponse(ctx, config.DomainName())
+		if err != nil || getCertificateRes.JSON200 == nil {
+			if err == nil {
+				err = errors.New("certificate : unable to get ssl certificate")
+			}
+			return usecase.WrapErrorSystem(err)
+		}
+
+		sslRaw := fmt.Sprintf("%v\n%v", getCertificateRes.JSON200.PublicCert, getCertificateRes.JSON200.PrivateCert)
+
+		ssl := bytes.NewReader([]byte(sslRaw))
+
+		_, err = haproxyClient.Storage.CreateStorageSSLCertificate(
+			storage.NewCreateStorageSSLCertificateParams().WithFileUpload(runtime.NamedReader(
+				config.DomainName(),
+				ssl,
+			)).WithForceReload(util.Bool(true)),
+			auth,
+		)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
+		}
+
+		return nil
 	}
 
 	return nil
