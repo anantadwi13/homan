@@ -86,7 +86,7 @@ func (u *ucInit) postExecute(
 	for _, config := range services {
 		switch config.Name() {
 		case u.systemName("haproxy"):
-			err := u.executor.InitVolume(ctx, config)
+			err := u.executor.InitVolume(ctx, false, config)
 			if err != nil {
 				return usecase.WrapErrorSystem(err)
 			}

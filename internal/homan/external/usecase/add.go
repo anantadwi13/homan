@@ -160,7 +160,7 @@ func (u *ucAdd) postExecute(
 	ctx context.Context, params *usecase.UcAddParams, config domainModel.ServiceConfig,
 ) usecase.Error {
 	// Init volume
-	err := u.executor.InitVolume(ctx, config)
+	err := u.executor.InitVolume(ctx, true, config)
 	if err != nil {
 		return usecase.WrapErrorSystem(err)
 	}

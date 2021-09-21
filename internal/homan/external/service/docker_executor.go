@@ -45,7 +45,7 @@ func NewDockerExecutor(
 	}
 }
 
-func (d *dockerExecutor) InitVolume(ctx context.Context, configs ...model.ServiceConfig) error {
+func (d *dockerExecutor) InitVolume(ctx context.Context, checkHealth bool, configs ...model.ServiceConfig) error {
 	var newServices []model.ServiceConfig
 	defer func() {
 		for _, config := range newServices {
@@ -69,7 +69,7 @@ func (d *dockerExecutor) InitVolume(ctx context.Context, configs ...model.Servic
 			nil,
 			nil,
 			config.HealthChecks(),
-			nil,
+			config.Networks(),
 			config.Tag(),
 		)
 
@@ -78,13 +78,7 @@ func (d *dockerExecutor) InitVolume(ctx context.Context, configs ...model.Servic
 			return err
 		}
 
-		isRunning, err := d.IsRunning(ctx, newService, false)
-		retry := 10
-		for retry > 0 && (err == nil && !isRunning) {
-			time.Sleep(100 * time.Millisecond)
-			isRunning, err = d.IsRunning(ctx, newService, false)
-			retry--
-		}
+		err = d.wait(ctx, 60, newService, checkHealth)
 		if err != nil {
 			return err
 		}
@@ -203,9 +197,10 @@ func (d *dockerExecutor) RunWait(ctx context.Context, timeout int, configs ...mo
 
 func (d *dockerExecutor) wait(ctx context.Context, timeout int, config model.ServiceConfig, checkHealth bool) error {
 	isRunning, err := d.IsRunning(ctx, config, checkHealth)
-	retry := timeout
+	timeoutPerIter := 1000 // in ms
+	retry := timeout * 1000 / timeoutPerIter
 	for retry > 0 && (err == nil && !isRunning) {
-		time.Sleep(1 * time.Second)
+		time.Sleep(time.Duration(timeoutPerIter) * time.Millisecond)
 		isRunning, err = d.IsRunning(ctx, config, checkHealth)
 		retry--
 	}
