@@ -3,60 +3,70 @@ package service
 import (
 	"context"
 	"github.com/anantadwi13/homan/internal/homan/domain"
-	model2 "github.com/anantadwi13/homan/internal/homan/domain/model"
-	service2 "github.com/anantadwi13/homan/internal/homan/domain/service"
+	"github.com/anantadwi13/homan/internal/homan/domain/model"
+	"github.com/anantadwi13/homan/internal/homan/domain/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 var (
-	r  service2.Registry
-	de service2.Executor
+	r  service.Registry
+	c  domain.Config
+	de service.Executor
 )
 
 func init() {
+	var err error
 	cmd := NewCommander()
-	c, err := domain.NewConfig(domain.ConfigParams{
-		BasePath:    "../../../temp",
+	c, err = domain.NewConfig(domain.ConfigParams{
+		BasePath:    "/tmp/test-project-homan",
 		ProjectName: "test-project",
+		DaemonPort:  32321,
 	})
 
 	if err != nil {
 		panic(err)
 	}
-	storage := service2.NewStorage()
+	storage := service.NewStorage()
 	r = NewLocalRegistry(c, storage)
 	de = NewDockerExecutor(c, cmd, r, storage)
 }
 
 func TestDockerExecutor(t *testing.T) {
-	sc := model2.NewServiceConfig(
+	sc := model.NewServiceConfig(
 		"test-container",
 		"test",
 		"anantadwi13/docker-proxy",
 		nil,
-		[]model2.Port{model2.NewPortBinding(8081, 80)},
+		[]model.Port{model.NewPortBinding(8081, 80)},
 		nil,
-		[]model2.HealthCheck{model2.NewHealthCheckHTTP(80, "/")},
-		[]string{"test-network"},
-		model2.TagWeb,
+		[]model.HealthCheck{model.NewHealthCheckTCP(80)},
+		[]string{c.ProjectName()},
+		model.TagWeb,
 	)
 
-	err := de.Run(context.TODO(), sc)
+	err := de.RunWait(context.TODO(), 10, r.GetCoreDaemon(context.TODO()))
 	assert.Nil(t, err)
-	isRunning, err := de.IsRunning(context.TODO(), sc)
+
+	defer func() {
+		_ = de.Stop(context.TODO(), r.GetCoreDaemon(context.TODO()))
+	}()
+
+	err = de.RunWait(context.TODO(), 10, sc)
+	assert.Nil(t, err)
+	isRunning, err := de.IsRunning(context.TODO(), sc, false)
 	assert.Nil(t, err)
 	assert.Equal(t, true, isRunning)
 
 	err = de.Restart(context.TODO(), sc)
 	assert.Nil(t, err)
-	isRunning, err = de.IsRunning(context.TODO(), sc)
+	isRunning, err = de.IsRunning(context.TODO(), sc, false)
 	assert.Nil(t, err)
 	assert.Equal(t, true, isRunning)
 
 	err = de.Stop(context.TODO(), sc)
 	assert.Nil(t, err)
-	isRunning, err = de.IsRunning(context.TODO(), sc)
+	isRunning, err = de.IsRunning(context.TODO(), sc, false)
 	assert.Nil(t, err)
 	assert.Equal(t, false, isRunning)
 

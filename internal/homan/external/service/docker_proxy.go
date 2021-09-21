@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/anantadwi13/homan/internal/homan/domain"
-	model2 "github.com/anantadwi13/homan/internal/homan/domain/model"
-	service2 "github.com/anantadwi13/homan/internal/homan/domain/service"
+	"github.com/anantadwi13/homan/internal/homan/domain/model"
+	"github.com/anantadwi13/homan/internal/homan/domain/service"
 	"github.com/google/uuid"
 	"net"
 	"net/http"
@@ -15,29 +15,29 @@ import (
 
 type dockerProxy struct {
 	config   domain.Config
-	executor service2.Executor
+	executor service.Executor
 }
 
-func NewDockerProxy(config domain.Config, executor service2.Executor) service2.Proxy {
+func NewDockerProxy(config domain.Config, executor service.Executor) service.Proxy {
 	return &dockerProxy{config: config, executor: executor}
 }
 
-func (d *dockerProxy) Execute(ctx context.Context, request func(proxy *model2.ProxyDetail) error) (err error) {
-	proxyService := model2.NewServiceConfig(
+func (d *dockerProxy) Execute(ctx context.Context, request func(proxy *model.ProxyDetail) error) (err error) {
+	proxyService := model.NewServiceConfig(
 		d.proxyName(),
 		"",
 		"anantadwi13/docker-proxy:0.2.0",
 		[]string{},
-		[]model2.Port{model2.NewPortBinding(d.proxyPort(), 80)},
-		[]model2.Volume{},
+		[]model.Port{model.NewPortBinding(d.proxyPort(), 80)},
+		[]model.Volume{},
 		// todo add healtcheck based on proxy type (tcp or http)
-		[]model2.HealthCheck{},
+		[]model.HealthCheck{},
 		[]string{d.config.ProjectName()},
-		model2.TagProxy,
+		model.TagProxy,
 	)
-	proxyDetail := &model2.ProxyDetail{
-		Host:     fmt.Sprintf("%v:%v", "localhost", d.proxyPort()),
-		FullPath: fmt.Sprintf("http://%v:%v/", "localhost", d.proxyPort()),
+	proxyDetail := &model.ProxyDetail{
+		Host:     fmt.Sprintf("%v:%v", "127.0.0.1", d.proxyPort()),
+		FullPath: fmt.Sprintf("http://%v:%v/", "127.0.0.1", d.proxyPort()),
 	}
 
 	// Start Proxy
@@ -88,7 +88,7 @@ func (d *dockerProxy) proxyPort() int {
 	selectedPort := -1
 	for port := 20001; port < 65536; port++ {
 		timeout := 10 * time.Millisecond
-		conn, err := net.DialTimeout("tcp", net.JoinHostPort("localhost", strconv.Itoa(port)), timeout)
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), timeout)
 		if err != nil || conn == nil {
 			selectedPort = port
 			break

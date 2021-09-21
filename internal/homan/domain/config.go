@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -23,6 +24,8 @@ type Config interface {
 	ProjectName() string
 	ServiceRegistryConfPath() string
 	SystemNamePrefix() string
+
+	DaemonPort() int
 }
 
 type ConfigParams struct {
@@ -35,6 +38,7 @@ type ConfigParams struct {
 	ProjectName             string // ProjectName default "homan"
 	ServiceRegistryConfName string // ServiceRegistryConfName relative to ConfigPath, default "registry"
 	SystemNamePrefix        string // default "system-"
+	DaemonPort              int    // default 5555
 }
 
 type config struct {
@@ -47,6 +51,7 @@ type config struct {
 	projectName             string
 	serviceRegistryConfPath string
 	systemNamePrefix        string
+	daemonPort              int
 }
 
 func NewConfig(params ConfigParams) (Config, error) {
@@ -96,6 +101,14 @@ func NewConfig(params ConfigParams) (Config, error) {
 	c.serviceRegistryConfPath = joinPath(c.configPath, params.ServiceRegistryConfName, "registry")
 	c.systemNamePrefix = checkEmpty(params.SystemNamePrefix, "system-")
 
+	if params.DaemonPort < 0 || params.DaemonPort >= 65536 {
+		return nil, errors.New("DaemonPort is invalid")
+	} else if params.DaemonPort == 0 {
+		c.daemonPort = 5555
+	} else {
+		c.daemonPort = params.DaemonPort
+	}
+
 	return c, nil
 }
 
@@ -133,4 +146,8 @@ func (c *config) ServiceRegistryConfPath() string {
 
 func (c *config) SystemNamePrefix() string {
 	return c.systemNamePrefix
+}
+
+func (c *config) DaemonPort() int {
+	return c.daemonPort
 }

@@ -14,6 +14,7 @@ var (
 
 type Registry interface {
 	GetAll(ctx context.Context) ([]model.ServiceConfig, error)
+	GetCoreDaemon(ctx context.Context) model.ServiceConfig
 	GetSystemServices(ctx context.Context) ([]model.ServiceConfig, error)
 	GetSystemServiceByTag(ctx context.Context, tag model.ServiceTag) ([]model.ServiceConfig, error)
 	GetUserServices(ctx context.Context) ([]model.ServiceConfig, error)

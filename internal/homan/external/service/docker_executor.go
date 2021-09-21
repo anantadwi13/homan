@@ -8,15 +8,18 @@ import (
 	"github.com/anantadwi13/homan/internal/homan/domain"
 	"github.com/anantadwi13/homan/internal/homan/domain/model"
 	"github.com/anantadwi13/homan/internal/homan/domain/service"
+	"github.com/anantadwi13/homan/internal/homan/external/api/homand"
 	"github.com/anantadwi13/homan/internal/homan/external/service/dto"
+	"net/http"
 	"time"
 )
 
 type dockerExecutor struct {
-	c        domain.Config
-	cmd      Commander
-	registry service.Registry
-	storage  service.Storage
+	c            domain.Config
+	cmd          Commander
+	registry     service.Registry
+	storage      service.Storage
+	homandClient *homand.ClientWithResponses
 }
 
 var ErrorDockerExecutorNetworkExist = errors.New("error [docker_executor]: network already exist")
@@ -29,11 +32,16 @@ func NewDockerExecutor(
 	registry service.Registry,
 	storage service.Storage,
 ) service.Executor {
+	homandClient, err := homand.NewClientWithResponses(fmt.Sprintf("http://127.0.0.1:%v/", c.DaemonPort()))
+	if err != nil {
+		panic(err)
+	}
 	return &dockerExecutor{
-		c:        c,
-		cmd:      cmd,
-		registry: registry,
-		storage:  storage,
+		c:            c,
+		cmd:          cmd,
+		registry:     registry,
+		storage:      storage,
+		homandClient: homandClient,
 	}
 }
 
@@ -70,11 +78,11 @@ func (d *dockerExecutor) InitVolume(ctx context.Context, configs ...model.Servic
 			return err
 		}
 
-		isRunning, err := d.IsRunning(ctx, newService)
+		isRunning, err := d.IsRunning(ctx, newService, false)
 		retry := 10
 		for retry > 0 && (err == nil && !isRunning) {
 			time.Sleep(100 * time.Millisecond)
-			isRunning, err = d.IsRunning(ctx, newService)
+			isRunning, err = d.IsRunning(ctx, newService, false)
 			retry--
 		}
 		if err != nil {
@@ -117,7 +125,7 @@ func (d *dockerExecutor) Run(ctx context.Context, configs ...model.ServiceConfig
 			return service.ErrorExecutorServiceConfigInvalid
 		}
 
-		if isRunning, err := d.IsRunning(ctx, config); err != nil || isRunning {
+		if isRunning, err := d.IsRunning(ctx, config, false); err != nil || isRunning {
 			if err == nil {
 				err = service.ErrorExecutorServiceIsRunning
 			}
@@ -175,6 +183,41 @@ func (d *dockerExecutor) Run(ctx context.Context, configs ...model.ServiceConfig
 	return nil
 }
 
+func (d *dockerExecutor) RunWait(ctx context.Context, timeout int, configs ...model.ServiceConfig) error {
+	err := d.Run(ctx, configs...)
+	if err != nil {
+		return err
+	}
+	for _, config := range configs {
+		if config == nil {
+			continue
+		}
+		err := d.wait(ctx, timeout, config, true)
+		if err != nil {
+			_ = d.Stop(ctx, configs...)
+			return err
+		}
+	}
+	return nil
+}
+
+func (d *dockerExecutor) wait(ctx context.Context, timeout int, config model.ServiceConfig, checkHealth bool) error {
+	isRunning, err := d.IsRunning(ctx, config, checkHealth)
+	retry := timeout
+	for retry > 0 && (err == nil && !isRunning) {
+		time.Sleep(1 * time.Second)
+		isRunning, err = d.IsRunning(ctx, config, checkHealth)
+		retry--
+	}
+	if err != nil {
+		return err
+	}
+	if !isRunning {
+		return errors.New(config.Name() + " is not running")
+	}
+	return nil
+}
+
 func (d *dockerExecutor) Stop(ctx context.Context, configs ...model.ServiceConfig) error {
 	var serviceName []string
 	var networks []string
@@ -186,7 +229,7 @@ func (d *dockerExecutor) Stop(ctx context.Context, configs ...model.ServiceConfi
 		if !config.IsValid() {
 			return service.ErrorExecutorServiceConfigInvalid
 		}
-		if isRunning, err := d.IsRunning(ctx, config); err != nil || !isRunning {
+		if isRunning, err := d.IsRunning(ctx, config, false); err != nil || !isRunning {
 			if err == nil {
 				err = service.ErrorExecutorServiceIsNotRunning
 			}
@@ -207,7 +250,72 @@ func (d *dockerExecutor) Stop(ctx context.Context, configs ...model.ServiceConfi
 	return nil
 }
 
-func (d *dockerExecutor) IsRunning(ctx context.Context, config model.ServiceConfig) (bool, error) {
+func (d *dockerExecutor) IsRunning(ctx context.Context, config model.ServiceConfig, checkHealth bool) (
+	bool, error,
+) {
+	isRunning, err := d.isRunning(ctx, config)
+	if err != nil {
+		return false, err
+	}
+	if !isRunning {
+		return false, nil
+	}
+
+	if checkHealth {
+		isRunning, err := d.isRunning(ctx, d.registry.GetCoreDaemon(ctx))
+		if err != nil {
+			return false, err
+		}
+		if !isRunning {
+			return false, errors.New("core daemon is not running")
+		}
+
+		for _, healthCheck := range config.HealthChecks() {
+			if healthCheck == nil {
+				continue
+			}
+
+			switch {
+			case config.Name() == d.registry.GetCoreDaemon(ctx).Name():
+				_, err := http.Get(fmt.Sprintf("http://127.0.0.1:%v/", d.c.DaemonPort()))
+				if err != nil {
+					return false, nil
+				}
+				return true, nil
+			default:
+				var (
+					hcType  homand.CheckHealthJSONBodyCheckType
+					address string
+				)
+
+				switch healthCheck.Type() {
+				case model.HealthCheckHTTP:
+					hcType = "http"
+					address = fmt.Sprintf("http://%v:%v%v", config.Name(), healthCheck.Port(), healthCheck.Endpoint())
+				case model.HealthCheckTCP:
+					hcType = "tcp"
+					address = fmt.Sprintf("%v:%v", config.Name(), healthCheck.Port())
+				default:
+					continue
+				}
+
+				res, err := d.homandClient.CheckHealthWithResponse(ctx, homand.CheckHealthJSONRequestBody{
+					Address:   address,
+					CheckType: hcType,
+				})
+				if err != nil {
+					return false, err
+				}
+				if res.JSON200 == nil || !res.JSON200.IsAvailable {
+					return false, nil
+				}
+			}
+		}
+	}
+	return true, nil
+}
+
+func (d *dockerExecutor) isRunning(ctx context.Context, config model.ServiceConfig) (bool, error) {
 	if config == nil || !config.IsValid() {
 		return false, service.ErrorExecutorServiceConfigInvalid
 	}
@@ -224,10 +332,10 @@ func (d *dockerExecutor) IsRunning(ctx context.Context, config model.ServiceConf
 	if len(containers) == 0 {
 		return false, nil
 	}
-	if containers[0] != nil && containers[0].State.Running {
-		return true, nil
+	if containers[0] == nil || !containers[0].State.Running {
+		return false, nil
 	}
-	return false, nil
+	return true, nil
 }
 
 func (d *dockerExecutor) Restart(ctx context.Context, configs ...model.ServiceConfig) error {
@@ -241,7 +349,7 @@ func (d *dockerExecutor) Restart(ctx context.Context, configs ...model.ServiceCo
 		if !config.IsValid() {
 			return service.ErrorExecutorServiceConfigInvalid
 		}
-		isRunning, err := d.IsRunning(ctx, config)
+		isRunning, err := d.IsRunning(ctx, config, false)
 		if err != nil {
 			return err
 		}

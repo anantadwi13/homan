@@ -4,7 +4,7 @@ import (
 	"context"
 	"embed"
 	"github.com/anantadwi13/homan/internal/homan/domain"
-	model2 "github.com/anantadwi13/homan/internal/homan/domain/model"
+	domainModel "github.com/anantadwi13/homan/internal/homan/domain/model"
 	"github.com/anantadwi13/homan/internal/homan/domain/service"
 	"github.com/anantadwi13/homan/internal/homan/domain/usecase"
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy"
@@ -14,8 +14,8 @@ import (
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/configuration"
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/frontend"
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/server"
-	transactions2 "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/transactions"
-	models2 "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/models"
+	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/transactions"
+	haproxyModel "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/models"
 	"github.com/anantadwi13/homan/internal/util"
 	"path/filepath"
 )
@@ -74,22 +74,29 @@ func (u *ucInit) Execute(ctx context.Context, params *usecase.UcInitParams) usec
 }
 
 func (u *ucInit) postExecute(
-	ctx context.Context, params *usecase.UcInitParams, services map[string]model2.ServiceConfig,
+	ctx context.Context, params *usecase.UcInitParams, services map[string]domainModel.ServiceConfig,
 ) usecase.Error {
+	// Run Core Daemon
+	err := u.executor.RunWait(ctx, 10, u.registry.GetCoreDaemon(ctx))
+	if err != nil && err != service.ErrorExecutorServiceIsRunning {
+		return usecase.WrapErrorSystem(err)
+	}
+
 	// Copy Data
 	for _, config := range services {
-		if config.Name() == u.systemName("mysql") {
+		switch config.Name() {
+		case u.systemName("haproxy"):
+			err := u.executor.InitVolume(ctx, config)
+			if err != nil {
+				return usecase.WrapErrorSystem(err)
+			}
+		default:
 			for _, volume := range config.VolumeBindings() {
 				err := u.storage.Mkdir(volume.HostPath())
 				if err != nil {
 					return usecase.WrapErrorSystem(err)
 				}
 			}
-			continue
-		}
-		err := u.executor.InitVolume(ctx, config)
-		if err != nil {
-			return usecase.WrapErrorSystem(err)
 		}
 	}
 
@@ -119,7 +126,7 @@ func (u *ucInit) postExecute(
 		return err2
 	}
 
-	err = u.proxy.Execute(ctx, func(proxy *model2.ProxyDetail) error {
+	err = u.proxy.Execute(ctx, func(proxy *domainModel.ProxyDetail) error {
 		haproxyClient, auth := haproxy.NewHaproxyClient(proxy.Host, services["haproxy"].Name()+":5555")
 
 		version, err := haproxyClient.Configuration.GetConfigurationVersion(configuration.NewGetConfigurationVersionParams(), auth)
@@ -127,52 +134,52 @@ func (u *ucInit) postExecute(
 			return err
 		}
 
-		transaction, err := haproxyClient.Transactions.StartTransaction(transactions2.NewStartTransactionParams().WithVersion(version.Payload), auth)
+		transaction, err := haproxyClient.Transactions.StartTransaction(transactions.NewStartTransactionParams().WithVersion(version.Payload), auth)
 		if err != nil {
 			return err
 		}
 
 		transactionId := &transaction.Payload.ID
 
-		mainBackend := &models2.Backend{
+		mainBackend := &haproxyModel.Backend{
 			Name: u.config.ProjectName(),
 			Mode: "http",
 		}
 
-		certmanBackend := &models2.Backend{
+		certmanBackend := &haproxyModel.Backend{
 			Name:       services["certman"].Name(),
 			Mode:       "http",
-			Forwardfor: &models2.Forwardfor{Enabled: util.String("enabled")},
-			Balance:    &models2.Balance{Algorithm: util.String("roundrobin")},
+			Forwardfor: &haproxyModel.Forwardfor{Enabled: util.String("enabled")},
+			Balance:    &haproxyModel.Balance{Algorithm: util.String("roundrobin")},
 		}
 
-		certmanServer := &models2.Server{
+		certmanServer := &haproxyModel.Server{
 			Name:    "server1",
 			Address: services["certman"].Name(),
 			Port:    util.Int64(80),
 			Check:   "enabled",
 		}
 
-		certmanBackendRule := &models2.BackendSwitchingRule{
+		certmanBackendRule := &haproxyModel.BackendSwitchingRule{
 			Index:    util.Int64(0),
 			Name:     certmanBackend.Name,
 			Cond:     "if",
 			CondTest: "{ path_beg /.well-known }",
 		}
 
-		mainFrontend := &models2.Frontend{
+		mainFrontend := &haproxyModel.Frontend{
 			Mode:           "http",
 			Name:           u.config.ProjectName(),
 			DefaultBackend: mainBackend.Name,
 		}
 
-		mainBind := &models2.Bind{
+		mainBind := &haproxyModel.Bind{
 			Address: "*",
 			Name:    "http",
 			Port:    util.Int64(80),
 		}
 
-		mainSecureBind := &models2.Bind{
+		mainSecureBind := &haproxyModel.Bind{
 			Address:        "*",
 			Name:           "https",
 			Port:           util.Int64(443),
@@ -226,7 +233,7 @@ func (u *ucInit) postExecute(
 			return err
 		}
 
-		_, _, err = haproxyClient.Transactions.CommitTransaction(transactions2.NewCommitTransactionParams().WithID(*transactionId), auth)
+		_, _, err = haproxyClient.Transactions.CommitTransaction(transactions.NewCommitTransactionParams().WithID(*transactionId), auth)
 		if err != nil {
 			return err
 		}
@@ -239,74 +246,74 @@ func (u *ucInit) postExecute(
 	return nil
 }
 
-func (u *ucInit) systemServices() map[string]model2.ServiceConfig {
-	return map[string]model2.ServiceConfig{
-		"haproxy": model2.NewServiceConfig(
+func (u *ucInit) systemServices() map[string]domainModel.ServiceConfig {
+	return map[string]domainModel.ServiceConfig{
+		"haproxy": domainModel.NewServiceConfig(
 			u.systemName("haproxy"),
 			"",
 			"haproxytech/haproxy-debian:2.4",
 			[]string{},
-			[]model2.Port{
-				model2.NewPort(5555),
-				model2.NewPortBinding(80, 80),
-				model2.NewPortBinding(443, 443),
+			[]domainModel.Port{
+				domainModel.NewPort(5555),
+				domainModel.NewPortBinding(80, 80),
+				domainModel.NewPortBinding(443, 443),
 			},
-			[]model2.Volume{
-				model2.NewVolumeBinding(u.filePathJoin("/haproxy"), "/usr/local/etc/haproxy"),
+			[]domainModel.Volume{
+				domainModel.NewVolumeBinding(u.filePathJoin("/haproxy"), "/usr/local/etc/haproxy"),
 			},
-			[]model2.HealthCheck{model2.NewHealthCheckHTTP(5555, "/v2")},
+			[]domainModel.HealthCheck{domainModel.NewHealthCheckTCP(5555)},
 			[]string{u.config.ProjectName()},
-			model2.TagGateway,
+			domainModel.TagGateway,
 		),
-		"dns": model2.NewServiceConfig(
+		"dns": domainModel.NewServiceConfig(
 			u.systemName("dns"),
 			"",
 			"anantadwi13/dns-server-manager:0.3.0",
 			[]string{},
-			[]model2.Port{
-				model2.NewPort(5555),
-				model2.NewPortBindingTCP(53, 53),
-				model2.NewPortBindingUDP(53, 53),
+			[]domainModel.Port{
+				domainModel.NewPort(5555),
+				domainModel.NewPortBindingTCP(53, 53),
+				domainModel.NewPortBindingUDP(53, 53),
 			},
-			[]model2.Volume{
-				model2.NewVolumeBinding(u.filePathJoin("/dns/data"), "/data"),
+			[]domainModel.Volume{
+				domainModel.NewVolumeBinding(u.filePathJoin("/dns/data"), "/data"),
 			},
-			[]model2.HealthCheck{model2.NewHealthCheckTCP(5555)},
+			[]domainModel.HealthCheck{domainModel.NewHealthCheckTCP(5555)},
 			[]string{u.config.ProjectName()},
-			model2.TagDNS,
+			domainModel.TagDNS,
 		),
-		"certman": model2.NewServiceConfig(
+		"certman": domainModel.NewServiceConfig(
 			u.systemName("certman"),
 			"",
 			"anantadwi13/letsencrypt-manager:0.2.0",
 			[]string{},
-			[]model2.Port{
-				model2.NewPort(5555),
-				model2.NewPort(80),
+			[]domainModel.Port{
+				domainModel.NewPort(5555),
+				domainModel.NewPort(80),
 			},
-			[]model2.Volume{
-				model2.NewVolumeBinding(u.filePathJoin("/certman/etc/letsencrypt"), "/etc/letsencrypt"),
+			[]domainModel.Volume{
+				domainModel.NewVolumeBinding(u.filePathJoin("/certman/etc/letsencrypt"), "/etc/letsencrypt"),
 			},
-			[]model2.HealthCheck{model2.NewHealthCheckTCP(5555)},
+			[]domainModel.HealthCheck{domainModel.NewHealthCheckTCP(5555)},
 			[]string{u.config.ProjectName()},
-			model2.TagCertMan,
+			domainModel.TagCertMan,
 		),
-		"mysql": model2.NewServiceConfig(
+		"mysql": domainModel.NewServiceConfig(
 			u.systemName("mysql"),
 			"",
 			"mysql:8",
 			[]string{
 				"MYSQL_ROOT_PASSWORD=my-secret-pw",
 			},
-			[]model2.Port{
-				model2.NewPort(3306),
+			[]domainModel.Port{
+				domainModel.NewPort(3306),
 			},
-			[]model2.Volume{
-				model2.NewVolumeBinding(u.filePathJoin("/mysql"), "/var/lib/mysql"),
+			[]domainModel.Volume{
+				domainModel.NewVolumeBinding(u.filePathJoin("/mysql"), "/var/lib/mysql"),
 			},
-			[]model2.HealthCheck{model2.NewHealthCheckTCP(3306)},
+			[]domainModel.HealthCheck{domainModel.NewHealthCheckTCP(3306)},
 			[]string{u.config.ProjectName()},
-			model2.TagDB,
+			domainModel.TagDB,
 		),
 	}
 }

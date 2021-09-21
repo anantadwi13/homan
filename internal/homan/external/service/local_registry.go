@@ -6,13 +6,14 @@ import (
 	"github.com/anantadwi13/homan/internal/homan/domain"
 	"github.com/anantadwi13/homan/internal/homan/domain/model"
 	"github.com/anantadwi13/homan/internal/homan/domain/service"
-	dto2 "github.com/anantadwi13/homan/internal/homan/external/service/dto"
+	"github.com/anantadwi13/homan/internal/homan/external/service/dto"
 	"io/fs"
 )
 
 type localRegistry struct {
-	config  domain.Config
-	storage service.Storage
+	config     domain.Config
+	storage    service.Storage
+	coreDaemon model.ServiceConfig
 }
 
 func NewLocalRegistry(
@@ -21,6 +22,21 @@ func NewLocalRegistry(
 	return &localRegistry{
 		config:  config,
 		storage: storage,
+		coreDaemon: model.NewServiceConfig(
+			config.SystemNamePrefix()+"core-daemon",
+			"",
+			"anantadwi13/homand:0.0.0-alpha1",
+			[]string{},
+			[]model.Port{
+				model.NewPortBinding(config.DaemonPort(), 80),
+			},
+			[]model.Volume{
+				model.NewVolumeBinding(config.BasePath(), "/data"),
+			},
+			nil,
+			[]string{config.ProjectName()},
+			"core",
+		),
 	}
 }
 
@@ -37,6 +53,10 @@ func (i *localRegistry) GetAll(ctx context.Context) ([]model.ServiceConfig, erro
 		services = append(services, serviceConfig)
 	}
 	return services, nil
+}
+
+func (i *localRegistry) GetCoreDaemon(ctx context.Context) model.ServiceConfig {
+	return i.coreDaemon
 }
 
 func (i *localRegistry) GetSystemServices(ctx context.Context) ([]model.ServiceConfig, error) {
@@ -172,23 +192,23 @@ func (i *localRegistry) IsSystem(ctx context.Context, sc model.ServiceConfig) (b
 func (i *localRegistry) writeToFile(
 	ctx context.Context, systemServices, userServices map[string]model.ServiceConfig,
 ) error {
-	system := make(map[string]*dto2.Service)
-	user := make(map[string]*dto2.Service)
+	system := make(map[string]*dto.Service)
+	user := make(map[string]*dto.Service)
 	for name, service := range systemServices {
-		s, err := dto2.MapServiceConfigToExternal(service)
+		s, err := dto.MapServiceConfigToExternal(service)
 		if err != nil {
 			return err
 		}
 		system[name] = s
 	}
 	for name, service := range userServices {
-		s, err := dto2.MapServiceConfigToExternal(service)
+		s, err := dto.MapServiceConfigToExternal(service)
 		if err != nil {
 			return err
 		}
 		user[name] = s
 	}
-	data, err := json.Marshal(dto2.RegistryData{
+	data, err := json.Marshal(dto.RegistryData{
 		SystemServices: system,
 		UserServices:   user,
 	})
@@ -215,7 +235,7 @@ func (i *localRegistry) readFromFile(ctx context.Context) (
 		}
 		return
 	}
-	rData := &dto2.RegistryData{}
+	rData := &dto.RegistryData{}
 	err = json.Unmarshal(data, rData)
 	if err != nil {
 		return
@@ -223,14 +243,14 @@ func (i *localRegistry) readFromFile(ctx context.Context) (
 	systemServices = make(map[string]model.ServiceConfig)
 	userServices = make(map[string]model.ServiceConfig)
 	for name, service := range rData.SystemServices {
-		serviceConfig, err := dto2.MapExternalToServiceConfig(name, service)
+		serviceConfig, err := dto.MapExternalToServiceConfig(name, service)
 		if err != nil {
 			return nil, nil, err
 		}
 		systemServices[name] = serviceConfig
 	}
 	for name, service := range rData.UserServices {
-		serviceConfig, err := dto2.MapExternalToServiceConfig(name, service)
+		serviceConfig, err := dto.MapExternalToServiceConfig(name, service)
 		if err != nil {
 			return nil, nil, err
 		}

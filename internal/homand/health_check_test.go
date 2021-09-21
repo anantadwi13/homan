@@ -12,7 +12,7 @@ import (
 func TestHealthChecker(t *testing.T) {
 	hc := NewHealthChecker()
 
-	host := "localhost:32100"
+	host := "127.0.0.1:32100"
 
 	http.HandleFunc("/ok", func(rw http.ResponseWriter, req *http.Request) {
 		_, _ = rw.Write([]byte("ok"))
@@ -55,7 +55,7 @@ func TestHealthChecker(t *testing.T) {
 	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckTCP, host)
 	assert.Nil(t, err)
 	assert.True(t, isAvailable)
-	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckTCP, "localhost:32133")
+	isAvailable, err = hc.IsAvailable(context.TODO(), HealthCheckTCP, "127.0.0.1:32133")
 	assert.Nil(t, err)
 	assert.False(t, isAvailable)
 }

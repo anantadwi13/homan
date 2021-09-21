@@ -6,20 +6,20 @@ import (
 	"errors"
 	"fmt"
 	"github.com/anantadwi13/homan/internal/homan/domain"
-	model2 "github.com/anantadwi13/homan/internal/homan/domain/model"
-	service2 "github.com/anantadwi13/homan/internal/homan/domain/service"
+	domainModel "github.com/anantadwi13/homan/internal/homan/domain/model"
+	domainService "github.com/anantadwi13/homan/internal/homan/domain/service"
 	"github.com/anantadwi13/homan/internal/homan/domain/usecase"
-	certman2 "github.com/anantadwi13/homan/internal/homan/external/api/certman"
-	dns2 "github.com/anantadwi13/homan/internal/homan/external/api/dns"
+	"github.com/anantadwi13/homan/internal/homan/external/api/certman"
+	"github.com/anantadwi13/homan/internal/homan/external/api/dns"
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy"
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/backend"
-	backend_switching_rule2 "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/backend_switching_rule"
+	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/backend_switching_rule"
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/configuration"
-	http_request_rule2 "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/http_request_rule"
+	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/http_request_rule"
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/server"
 	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/storage"
-	transactions2 "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/transactions"
-	models2 "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/models"
+	"github.com/anantadwi13/homan/internal/homan/external/api/haproxy/client/transactions"
+	haproxyModel "github.com/anantadwi13/homan/internal/homan/external/api/haproxy/models"
 	"github.com/anantadwi13/homan/internal/util"
 	"github.com/go-openapi/runtime"
 	"path/filepath"
@@ -28,14 +28,14 @@ import (
 
 type ucAdd struct {
 	config      domain.Config
-	registry    service2.Registry
-	executor    service2.Executor
-	proxy       service2.Proxy
+	registry    domainService.Registry
+	executor    domainService.Executor
+	proxy       domainService.Proxy
 	regexDomain *regexp.Regexp
 }
 
 func NewUcAdd(
-	config domain.Config, registry service2.Registry, executor service2.Executor, proxy service2.Proxy,
+	config domain.Config, registry domainService.Registry, executor domainService.Executor, proxy domainService.Proxy,
 ) usecase.UcAdd {
 	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
 	if err != nil {
@@ -51,7 +51,7 @@ func (u *ucAdd) Execute(ctx context.Context, params *usecase.UcAddParams) usecas
 		return err
 	}
 
-	var config model2.ServiceConfig
+	var config domainModel.ServiceConfig
 	switch params.ServiceType {
 	case usecase.ServiceTypeBlog:
 		dbName, err := u.getDbName(params.Domain)
@@ -59,7 +59,7 @@ func (u *ucAdd) Execute(ctx context.Context, params *usecase.UcAddParams) usecas
 			return usecase.WrapErrorSystem(err)
 		}
 
-		config = model2.NewServiceConfig(
+		config = domainModel.NewServiceConfig(
 			params.Name,
 			params.Domain,
 			"wordpress:5.8.0-apache",
@@ -70,17 +70,17 @@ func (u *ucAdd) Execute(ctx context.Context, params *usecase.UcAddParams) usecas
 				"WORDPRESS_DB_NAME=" + dbName,
 				"WORDPRESS_TABLE_PREFIX=wp_",
 			},
-			[]model2.Port{
-				model2.NewPort(80),
+			[]domainModel.Port{
+				domainModel.NewPort(80),
 			},
-			[]model2.Volume{
-				model2.NewVolumeBinding(filepath.Join(u.config.DataPath(), params.Name+"/wp-content/"), "/var/www/html/wp-content/"),
+			[]domainModel.Volume{
+				domainModel.NewVolumeBinding(filepath.Join(u.config.DataPath(), params.Name+"/"), "/var/www/html/"),
 			},
-			[]model2.HealthCheck{
-				model2.NewHealthCheckHTTP(80, "/"),
+			[]domainModel.HealthCheck{
+				domainModel.NewHealthCheckTCP(80),
 			},
 			[]string{u.config.ProjectName()},
-			model2.TagWeb,
+			domainModel.TagWeb,
 		)
 	case usecase.ServiceTypeCustom:
 	}
@@ -120,7 +120,7 @@ func (u *ucAdd) preExecute(ctx context.Context, params *usecase.UcAddParams) use
 	}
 
 	for _, systemService := range systemServices {
-		isRunning, err := u.executor.IsRunning(ctx, systemService)
+		isRunning, err := u.executor.IsRunning(ctx, systemService, true)
 		if err != nil {
 			return usecase.WrapErrorSystem(err)
 		}
@@ -147,18 +147,24 @@ func (u *ucAdd) preExecute(ctx context.Context, params *usecase.UcAddParams) use
 }
 
 func (u *ucAdd) postExecute(
-	ctx context.Context, params *usecase.UcAddParams, config model2.ServiceConfig,
+	ctx context.Context, params *usecase.UcAddParams, config domainModel.ServiceConfig,
 ) usecase.Error {
-	// Run service
-	err := u.executor.Run(ctx, config)
+	// Init volume
+	err := u.executor.InitVolume(ctx, config)
 	if err != nil {
-		return nil
+		return usecase.WrapErrorSystem(err)
+	}
+
+	// Run service
+	err = u.executor.RunWait(ctx, 60, config)
+	if err != nil {
+		return usecase.WrapErrorSystem(err)
 	}
 
 	// Add Database
 	// todo
 
-	services, err := u.registry.GetSystemServiceByTag(ctx, model2.TagGateway)
+	services, err := u.registry.GetSystemServiceByTag(ctx, domainModel.TagGateway)
 	if err != nil {
 		return usecase.WrapErrorSystem(err)
 	}
@@ -167,7 +173,7 @@ func (u *ucAdd) postExecute(
 	}
 	haproxyService := services[0]
 
-	services, err = u.registry.GetSystemServiceByTag(ctx, model2.TagDNS)
+	services, err = u.registry.GetSystemServiceByTag(ctx, domainModel.TagDNS)
 	if err != nil {
 		return usecase.WrapErrorSystem(err)
 	}
@@ -176,7 +182,7 @@ func (u *ucAdd) postExecute(
 	}
 	dnsService := services[0]
 
-	services, err = u.registry.GetSystemServiceByTag(ctx, model2.TagCertMan)
+	services, err = u.registry.GetSystemServiceByTag(ctx, domainModel.TagCertMan)
 	if err != nil {
 		return usecase.WrapErrorSystem(err)
 	}
@@ -186,7 +192,7 @@ func (u *ucAdd) postExecute(
 	certmanService := services[0]
 
 	if config.DomainName() != "" {
-		err = u.proxy.Execute(ctx, func(proxy *model2.ProxyDetail) error {
+		err = u.proxy.Execute(ctx, func(proxy *domainModel.ProxyDetail) error {
 
 			// Add Haproxy Backend
 
@@ -197,7 +203,7 @@ func (u *ucAdd) postExecute(
 				return err
 			}
 
-			transaction, err := haproxyClient.Transactions.StartTransaction(transactions2.NewStartTransactionParams().WithVersion(version.Payload), auth)
+			transaction, err := haproxyClient.Transactions.StartTransaction(transactions.NewStartTransactionParams().WithVersion(version.Payload), auth)
 			if err != nil {
 				return err
 			}
@@ -206,14 +212,14 @@ func (u *ucAdd) postExecute(
 			mainFrontendName := u.config.ProjectName()
 
 			rules, err := haproxyClient.BackendSwitchingRule.GetBackendSwitchingRules(
-				backend_switching_rule2.NewGetBackendSwitchingRulesParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName),
+				backend_switching_rule.NewGetBackendSwitchingRulesParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName),
 				auth,
 			)
 			if err != nil {
 				return err
 			}
 			requestRulesRes, err := haproxyClient.HTTPRequestRule.GetHTTPRequestRules(
-				http_request_rule2.NewGetHTTPRequestRulesParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName),
+				http_request_rule.NewGetHTTPRequestRulesParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName),
 				auth,
 			)
 			if err != nil {
@@ -223,28 +229,28 @@ func (u *ucAdd) postExecute(
 			backendRules := rules.Payload.Data
 			requestRules := requestRulesRes.Payload.Data
 
-			configBackend := &models2.Backend{
+			configBackend := &haproxyModel.Backend{
 				Name:       config.Name(),
 				Mode:       "http",
-				Forwardfor: &models2.Forwardfor{Enabled: util.String("enabled")},
-				Balance:    &models2.Balance{Algorithm: util.String("roundrobin")},
+				Forwardfor: &haproxyModel.Forwardfor{Enabled: util.String("enabled")},
+				Balance:    &haproxyModel.Balance{Algorithm: util.String("roundrobin")},
 			}
 
-			configServer := &models2.Server{
+			configServer := &haproxyModel.Server{
 				Name:    "server1",
 				Address: config.Name(),
 				Port:    util.Int64(80),
 				Check:   "enabled",
 			}
 
-			configBackendRule := &models2.BackendSwitchingRule{
+			configBackendRule := &haproxyModel.BackendSwitchingRule{
 				Index:    util.Int64(int64(len(backendRules))),
 				Name:     configBackend.Name,
 				Cond:     "if",
 				CondTest: fmt.Sprintf("{ hdr(host) -i %v www.%v }", config.DomainName(), config.DomainName()),
 			}
 
-			configHttpRequestRule := &models2.HTTPRequestRule{
+			configHttpRequestRule := &haproxyModel.HTTPRequestRule{
 				Index:      util.Int64(int64(len(requestRules))),
 				Type:       "redirect",
 				RedirType:  "scheme",
@@ -254,7 +260,7 @@ func (u *ucAdd) postExecute(
 				CondTest:   fmt.Sprintf("{ hdr(host) -i %v www.%v } !{ ssl_fc }", config.DomainName(), config.DomainName()),
 			}
 
-			configHttpRequestHeaderRule := &models2.HTTPRequestRule{
+			configHttpRequestHeaderRule := &haproxyModel.HTTPRequestRule{
 				Index:     util.Int64(int64(len(requestRules) + 1)),
 				Type:      "set-header",
 				HdrName:   "X-Forwarded-Proto",
@@ -274,7 +280,7 @@ func (u *ucAdd) postExecute(
 			}
 
 			_, _, err = haproxyClient.BackendSwitchingRule.CreateBackendSwitchingRule(
-				backend_switching_rule2.NewCreateBackendSwitchingRuleParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName).WithData(configBackendRule),
+				backend_switching_rule.NewCreateBackendSwitchingRuleParams().WithTransactionID(transactionId).WithFrontend(mainFrontendName).WithData(configBackendRule),
 				auth,
 			)
 			if err != nil {
@@ -282,7 +288,7 @@ func (u *ucAdd) postExecute(
 			}
 
 			_, _, err = haproxyClient.HTTPRequestRule.CreateHTTPRequestRule(
-				http_request_rule2.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestRule),
+				http_request_rule.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestRule),
 				auth,
 			)
 			if err != nil {
@@ -290,25 +296,25 @@ func (u *ucAdd) postExecute(
 			}
 
 			_, _, err = haproxyClient.HTTPRequestRule.CreateHTTPRequestRule(
-				http_request_rule2.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestHeaderRule),
+				http_request_rule.NewCreateHTTPRequestRuleParams().WithTransactionID(transactionId).WithParentType("frontend").WithParentName(mainFrontendName).WithData(configHttpRequestHeaderRule),
 				auth,
 			)
 			if err != nil {
 				return err
 			}
 
-			_, _, err = haproxyClient.Transactions.CommitTransaction(transactions2.NewCommitTransactionParams().WithID(*transactionId).WithForceReload(util.Bool(true)), auth)
+			_, _, err = haproxyClient.Transactions.CommitTransaction(transactions.NewCommitTransactionParams().WithID(*transactionId).WithForceReload(util.Bool(true)), auth)
 			if err != nil {
 				return err
 			}
 
 			// Add Domain Name
-			dnsClient, err := dns2.NewDnsClient(proxy.FullPath, dnsService.Name()+":5555")
+			dnsClient, err := dns.NewDnsClient(proxy.FullPath, dnsService.Name()+":5555")
 			if err != nil {
 				return err
 			}
 
-			createZoneRes, err := dnsClient.CreateZoneWithResponse(ctx, dns2.CreateZoneJSONRequestBody{
+			createZoneRes, err := dnsClient.CreateZoneWithResponse(ctx, dns.CreateZoneJSONRequestBody{
 				Domain:    config.DomainName(),
 				MailAddr:  fmt.Sprintf("root.%v.", config.DomainName()),
 				PrimaryNs: fmt.Sprintf("ns1.%v.", config.DomainName()),
@@ -320,7 +326,7 @@ func (u *ucAdd) postExecute(
 				return err
 			}
 
-			createRecordRes, err := dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns2.CreateRecordJSONRequestBody{
+			createRecordRes, err := dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
 				Name:  "ns1",
 				Type:  "A",
 				Value: u.config.PublicIP(),
@@ -332,7 +338,7 @@ func (u *ucAdd) postExecute(
 				return err
 			}
 
-			createRecordRes, err = dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns2.CreateRecordJSONRequestBody{
+			createRecordRes, err = dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
 				Name:  "@",
 				Type:  "A",
 				Value: u.config.PublicIP(),
@@ -344,7 +350,7 @@ func (u *ucAdd) postExecute(
 				return err
 			}
 
-			createRecordRes, err = dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns2.CreateRecordJSONRequestBody{
+			createRecordRes, err = dnsClient.CreateRecordWithResponse(ctx, config.DomainName(), dns.CreateRecordJSONRequestBody{
 				Name:  "www",
 				Type:  "A",
 				Value: u.config.PublicIP(),
@@ -357,12 +363,12 @@ func (u *ucAdd) postExecute(
 			}
 
 			// Add Certificate
-			certmanClient, err := certman2.NewCertmanClient(proxy.FullPath, certmanService.Name()+":5555")
+			certmanClient, err := certman.NewCertmanClient(proxy.FullPath, certmanService.Name()+":5555")
 			if err != nil {
 				return err
 			}
 
-			createCertificateRes, err := certmanClient.CreateCertificateWithResponse(ctx, certman2.CreateCertificateJSONRequestBody{
+			createCertificateRes, err := certmanClient.CreateCertificateWithResponse(ctx, certman.CreateCertificateJSONRequestBody{
 				Domain:     config.DomainName(),
 				Email:      fmt.Sprintf("admin@%v", config.DomainName()),
 				AltDomains: &[]string{fmt.Sprintf("www.%v", config.DomainName())},
