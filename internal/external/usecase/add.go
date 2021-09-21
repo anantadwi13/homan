@@ -76,6 +76,9 @@ func (u *ucAdd) Execute(ctx context.Context, params *domainUsecase.UcAddParams) 
 			[]model.Volume{
 				model.NewVolumeBinding(filepath.Join(u.config.DataPath(), params.Name+"/wp-content/"), "/var/www/html/wp-content/"),
 			},
+			[]model.HealthCheck{
+				model.NewHealthCheckHTTP(80, "/"),
+			},
 			[]string{u.config.ProjectName()},
 			model.TagWeb,
 		)

@@ -3,15 +3,22 @@ package dto
 import "time"
 
 type Service struct {
-	FilePath    string      `yaml:"-" json:"file_path,omitempty"`
-	Build       interface{} `yaml:"-" json:"-,omitempty"`
-	DomainName  string      `yaml:"-" json:"domain_name,omitempty"`
-	Image       string      `yaml:"image" json:"image,omitempty"`
-	Environment []string    `yaml:"environment" json:"environment,omitempty"`
-	Ports       []string    `yaml:"ports" json:"ports,omitempty"`
-	Networks    []string    `yaml:"networks" json:"networks,omitempty"`
-	Volumes     []string    `yaml:"volumes" json:"volumes,omitempty"`
-	Tag         string      `yaml:"-" json:"type,omitempty"`
+	FilePath     string         `yaml:"-" json:"file_path,omitempty"`
+	Build        interface{}    `yaml:"-" json:"-,omitempty"`
+	DomainName   string         `yaml:"-" json:"domain_name,omitempty"`
+	Image        string         `yaml:"image" json:"image,omitempty"`
+	Environment  []string       `yaml:"environment" json:"environment,omitempty"`
+	Ports        []string       `yaml:"ports" json:"ports,omitempty"`
+	Volumes      []string       `yaml:"volumes" json:"volumes,omitempty"`
+	HealthChecks []*HealthCheck `yaml:"-" json:"health_checks,omitempty"`
+	Networks     []string       `yaml:"networks" json:"networks,omitempty"`
+	Tag          string         `yaml:"-" json:"type,omitempty"`
+}
+
+type HealthCheck struct {
+	Type     string `json:"type"`
+	Port     int    `json:"port"`
+	Endpoint string `json:"endpoint"`
 }
 
 type Network struct {

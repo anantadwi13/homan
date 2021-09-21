@@ -60,6 +60,7 @@ func (d *dockerExecutor) InitVolume(ctx context.Context, configs ...model.Servic
 			config.Environments(),
 			nil,
 			nil,
+			config.HealthChecks(),
 			nil,
 			config.Tag(),
 		)

@@ -26,10 +26,12 @@ func (d *dockerProxy) Execute(ctx context.Context, request func(proxy *model.Pro
 	proxyService := model.NewServiceConfig(
 		d.proxyName(),
 		"",
-		"anantadwi13/docker-proxy:0.1.1",
+		"anantadwi13/docker-proxy:0.2.0",
 		[]string{},
 		[]model.Port{model.NewPortBinding(d.proxyPort(), 80)},
 		[]model.Volume{},
+		// todo add healtcheck based on proxy type (tcp or http)
+		[]model.HealthCheck{},
 		[]string{d.config.ProjectName()},
 		model.TagProxy,
 	)

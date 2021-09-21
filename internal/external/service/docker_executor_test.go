@@ -37,6 +37,7 @@ func TestDockerExecutor(t *testing.T) {
 		nil,
 		[]model.Port{model.NewPortBinding(8081, 80)},
 		nil,
+		[]model.HealthCheck{model.NewHealthCheckHTTP(80, "/")},
 		[]string{"test-network"},
 		model.TagWeb,
 	)

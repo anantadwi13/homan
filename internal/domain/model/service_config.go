@@ -21,6 +21,7 @@ type ServiceConfig interface {
 	Environments() []string
 	PortBindings() []Port
 	VolumeBindings() []Volume
+	HealthChecks() []HealthCheck
 	Networks() []string
 	Tag() ServiceTag
 
@@ -36,6 +37,7 @@ type sc struct {
 	environments []string
 	ports        []Port
 	volBindings  []Volume
+	healthChecks []HealthCheck
 	networks     []string
 	serviceTag   ServiceTag
 	isCustom     bool
@@ -43,7 +45,7 @@ type sc struct {
 
 func NewServiceConfig(
 	name string, domainName string, image string, environments []string, portBindings []Port, volBindings []Volume,
-	networks []string, serviceTag ServiceTag,
+	healthChecks []HealthCheck, networks []string, serviceTag ServiceTag,
 ) ServiceConfig {
 	return &sc{
 		image:        image,
@@ -52,6 +54,7 @@ func NewServiceConfig(
 		environments: environments,
 		ports:        portBindings,
 		volBindings:  volBindings,
+		healthChecks: healthChecks,
 		networks:     networks,
 		isCustom:     false,
 		serviceTag:   serviceTag,
@@ -97,6 +100,10 @@ func (s *sc) VolumeBindings() []Volume {
 	return s.volBindings
 }
 
+func (s *sc) HealthChecks() []HealthCheck {
+	return s.healthChecks
+}
+
 func (s *sc) Networks() []string {
 	return s.networks
 }
@@ -114,12 +121,26 @@ func (s *sc) IsValid() bool {
 		return s.file != ""
 	} else {
 		for _, port := range s.ports {
+			if port == nil {
+				return false
+			}
 			if !port.IsValid() {
 				return false
 			}
 		}
 		for _, volBinding := range s.volBindings {
+			if volBinding == nil {
+				return false
+			}
 			if !volBinding.IsValid() {
+				return false
+			}
+		}
+		for _, hc := range s.healthChecks {
+			if hc == nil {
+				return false
+			}
+			if !hc.IsValid() {
 				return false
 			}
 		}

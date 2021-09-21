@@ -9,8 +9,9 @@ import (
 
 func MapServiceConfigToExternal(config model.ServiceConfig) (*Service, error) {
 	var (
-		ports   []string
-		volumes []string
+		ports        []string
+		volumes      []string
+		healthChecks []*HealthCheck
 	)
 	for _, port := range config.PortBindings() {
 		ports = append(ports, port.String())
@@ -18,16 +19,24 @@ func MapServiceConfigToExternal(config model.ServiceConfig) (*Service, error) {
 	for _, volume := range config.VolumeBindings() {
 		volumes = append(volumes, volume.String())
 	}
+	for _, healthCheck := range config.HealthChecks() {
+		healthChecks = append(healthChecks, &HealthCheck{
+			Type:     string(healthCheck.Type()),
+			Port:     healthCheck.Port(),
+			Endpoint: healthCheck.Endpoint(),
+		})
+	}
 
 	return &Service{
-		FilePath:    config.FilePath(),
-		Image:       config.Image(),
-		DomainName:  config.DomainName(),
-		Environment: config.Environments(),
-		Ports:       ports,
-		Networks:    config.Networks(),
-		Volumes:     volumes,
-		Tag:         string(config.Tag()),
+		FilePath:     config.FilePath(),
+		Image:        config.Image(),
+		DomainName:   config.DomainName(),
+		Environment:  config.Environments(),
+		Ports:        ports,
+		Volumes:      volumes,
+		HealthChecks: healthChecks,
+		Networks:     config.Networks(),
+		Tag:          string(config.Tag()),
 	}, nil
 }
 
@@ -35,6 +44,7 @@ func MapExternalToServiceConfig(name string, svc *Service) (model.ServiceConfig,
 	var (
 		ports          []model.Port
 		volumeBindings []model.Volume
+		healthChecks   []model.HealthCheck
 	)
 
 	for _, port := range svc.Ports {
@@ -78,6 +88,16 @@ func MapExternalToServiceConfig(name string, svc *Service) (model.ServiceConfig,
 			volumeBindings = append(volumeBindings, model.NewVolume(v[0]))
 		}
 	}
+	for _, healthCheck := range svc.HealthChecks {
+		switch healthCheck.Type {
+		case string(model.HealthCheckHTTP):
+			hc := model.NewHealthCheckHTTP(healthCheck.Port, healthCheck.Endpoint)
+			healthChecks = append(healthChecks, hc)
+		case string(model.HealthCheckTCP):
+			hc := model.NewHealthCheckTCP(healthCheck.Port)
+			healthChecks = append(healthChecks, hc)
+		}
+	}
 
 	if svc.FilePath != "" {
 		config := model.NewCustomServiceConfig(name, svc.DomainName, svc.FilePath, ports)
@@ -91,6 +111,7 @@ func MapExternalToServiceConfig(name string, svc *Service) (model.ServiceConfig,
 		svc.Environment,
 		ports,
 		volumeBindings,
+		healthChecks,
 		svc.Networks,
 		model.ServiceTag(svc.Tag),
 	), nil

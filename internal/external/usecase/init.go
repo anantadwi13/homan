@@ -254,6 +254,7 @@ func (u *ucInit) systemServices() map[string]model.ServiceConfig {
 			[]model.Volume{
 				model.NewVolumeBinding(u.filePathJoin("/haproxy"), "/usr/local/etc/haproxy"),
 			},
+			[]model.HealthCheck{model.NewHealthCheckHTTP(5555, "/v2")},
 			[]string{u.config.ProjectName()},
 			model.TagGateway,
 		),
@@ -270,6 +271,7 @@ func (u *ucInit) systemServices() map[string]model.ServiceConfig {
 			[]model.Volume{
 				model.NewVolumeBinding(u.filePathJoin("/dns/data"), "/data"),
 			},
+			[]model.HealthCheck{model.NewHealthCheckTCP(5555)},
 			[]string{u.config.ProjectName()},
 			model.TagDNS,
 		),
@@ -285,6 +287,7 @@ func (u *ucInit) systemServices() map[string]model.ServiceConfig {
 			[]model.Volume{
 				model.NewVolumeBinding(u.filePathJoin("/certman/etc/letsencrypt"), "/etc/letsencrypt"),
 			},
+			[]model.HealthCheck{model.NewHealthCheckTCP(5555)},
 			[]string{u.config.ProjectName()},
 			model.TagCertMan,
 		),
@@ -301,6 +304,7 @@ func (u *ucInit) systemServices() map[string]model.ServiceConfig {
 			[]model.Volume{
 				model.NewVolumeBinding(u.filePathJoin("/mysql"), "/var/lib/mysql"),
 			},
+			[]model.HealthCheck{model.NewHealthCheckTCP(3306)},
 			[]string{u.config.ProjectName()},
 			model.TagDB,
 		),

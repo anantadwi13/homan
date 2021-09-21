@@ -41,6 +41,7 @@ func TestDockerProxy(t *testing.T) {
 		nil,
 		[]model.Port{model.NewPort(80)},
 		nil,
+		[]model.HealthCheck{model.NewHealthCheckHTTP(80, "/")},
 		[]string{c2.ProjectName()},
 		model.TagWeb,
 	)
