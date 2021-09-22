@@ -13,7 +13,7 @@ var (
 )
 
 type Executor interface {
-	InitVolume(ctx context.Context, checkHealth bool, configs ...model.ServiceConfig) error
+	Init(ctx context.Context, configs ...model.ServiceConfig) error
 	Run(ctx context.Context, configs ...model.ServiceConfig) error
 	// RunWait will run services and wait them entering ready state (by checking HealthCheck). Timeout in seconds
 	RunWait(ctx context.Context, timeout int, configs ...model.ServiceConfig) error

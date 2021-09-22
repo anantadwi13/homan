@@ -159,8 +159,8 @@ func (u *ucAdd) preExecute(ctx context.Context, params *usecase.UcAddParams) use
 func (u *ucAdd) postExecute(
 	ctx context.Context, params *usecase.UcAddParams, config domainModel.ServiceConfig,
 ) usecase.Error {
-	// Init volume
-	err := u.executor.InitVolume(ctx, true, config)
+	// Init service
+	err := u.executor.Init(ctx, config)
 	if err != nil {
 		return usecase.WrapErrorSystem(err)
 	}

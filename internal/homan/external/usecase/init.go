@@ -82,21 +82,10 @@ func (u *ucInit) postExecute(
 		return usecase.WrapErrorSystem(err)
 	}
 
-	// Copy Data
 	for _, config := range services {
-		switch config.Name() {
-		case u.systemName("haproxy"):
-			err := u.executor.InitVolume(ctx, false, config)
-			if err != nil {
-				return usecase.WrapErrorSystem(err)
-			}
-		default:
-			for _, volume := range config.VolumeBindings() {
-				err := u.storage.Mkdir(volume.HostPath())
-				if err != nil {
-					return usecase.WrapErrorSystem(err)
-				}
-			}
+		err = u.executor.Init(ctx, config)
+		if err != nil {
+			return usecase.WrapErrorSystem(err)
 		}
 	}
 
@@ -259,7 +248,7 @@ func (u *ucInit) systemServices() map[string]domainModel.ServiceConfig {
 				domainModel.NewPortBinding(443, 443),
 			},
 			[]domainModel.Volume{
-				domainModel.NewVolumeBinding(u.filePathJoin("/haproxy"), "/usr/local/etc/haproxy"),
+				domainModel.NewVolumeBindingCopy(u.filePathJoin("/haproxy"), "/usr/local/etc/haproxy"),
 			},
 			[]domainModel.HealthCheck{domainModel.NewHealthCheckTCP(5555)},
 			[]string{u.config.ProjectName()},

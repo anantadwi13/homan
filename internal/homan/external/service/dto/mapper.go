@@ -1,23 +1,28 @@
 package dto
 
 import (
-	"errors"
-	model2 "github.com/anantadwi13/homan/internal/homan/domain/model"
-	"strconv"
-	"strings"
+	domainModel "github.com/anantadwi13/homan/internal/homan/domain/model"
 )
 
-func MapServiceConfigToExternal(config model2.ServiceConfig) (*Service, error) {
+func MapServiceConfigToExternal(config domainModel.ServiceConfig) (*Service, error) {
 	var (
-		ports        []string
-		volumes      []string
+		ports        []*Port
+		volumes      []*Volume
 		healthChecks []*HealthCheck
 	)
 	for _, port := range config.PortBindings() {
-		ports = append(ports, port.String())
+		ports = append(ports, &Port{
+			HostPort:      port.HostPort(),
+			ContainerPort: port.ContainerPort(),
+			Protocol:      string(port.Protocol()),
+		})
 	}
 	for _, volume := range config.VolumeBindings() {
-		volumes = append(volumes, volume.String())
+		volumes = append(volumes, &Volume{
+			HostPath:      volume.HostPath(),
+			ContainerPath: volume.ContainerPath(),
+			NeedCopy:      volume.NeedCopy(),
+		})
 	}
 	for _, healthCheck := range config.HealthChecks() {
 		healthChecks = append(healthChecks, &HealthCheck{
@@ -37,74 +42,64 @@ func MapServiceConfigToExternal(config model2.ServiceConfig) (*Service, error) {
 		HealthChecks: healthChecks,
 		Networks:     config.Networks(),
 		Tag:          string(config.Tag()),
+		IsCustom:     config.IsCustom(),
 	}, nil
 }
 
-func MapExternalToServiceConfig(name string, svc *Service) (model2.ServiceConfig, error) {
+func MapExternalToServiceConfig(name string, svc *Service) (domainModel.ServiceConfig, error) {
 	var (
-		ports          []model2.Port
-		volumeBindings []model2.Volume
-		healthChecks   []model2.HealthCheck
+		ports          []domainModel.Port
+		volumeBindings []domainModel.Volume
+		healthChecks   []domainModel.HealthCheck
 	)
 
 	for _, port := range svc.Ports {
-		portProto := strings.SplitN(port, "/", 2)
-		if len(portProto) < 1 || len(portProto) > 2 {
-			return nil, errors.New("error [MapExternalToServiceConfig]: invalid port and protocol")
+		if port.HostPort == domainModel.UnsetPort {
+			ports = append(ports, domainModel.NewPort(port.ContainerPort))
+			continue
 		}
-		proto := ""
-		if len(portProto) == 2 {
-			proto = portProto[1]
-		}
-		p := strings.SplitN(portProto[0], ":", 2)
-		var pInt []int
-		for _, v := range p {
-			vInt, err := strconv.Atoi(v)
-			if err != nil {
-				return nil, err
+		switch port.Protocol {
+		case string(domainModel.ProtocolTCP):
+			ports = append(ports, domainModel.NewPortBindingTCP(port.HostPort, port.ContainerPort))
+		case string(domainModel.ProtocolUDP):
+			ports = append(ports, domainModel.NewPortBindingUDP(port.HostPort, port.ContainerPort))
+		default:
+			if port.HostPort == domainModel.UnsetPort {
+				ports = append(ports, domainModel.NewPort(port.ContainerPort))
+			} else {
+				ports = append(ports, domainModel.NewPortBinding(port.HostPort, port.ContainerPort))
 			}
-			pInt = append(pInt, vInt)
-		}
-		switch len(pInt) {
-		case 2:
-			switch proto {
-			case string(model2.ProtocolTCP):
-				ports = append(ports, model2.NewPortBindingTCP(pInt[0], pInt[1]))
-			case string(model2.ProtocolUDP):
-				ports = append(ports, model2.NewPortBindingUDP(pInt[0], pInt[1]))
-			default:
-				ports = append(ports, model2.NewPortBinding(pInt[0], pInt[1]))
-			}
-		case 1:
-			ports = append(ports, model2.NewPort(pInt[0]))
 		}
 	}
 	for _, volume := range svc.Volumes {
-		v := strings.SplitN(volume, ":", 2)
-		switch len(v) {
-		case 2:
-			volumeBindings = append(volumeBindings, model2.NewVolumeBinding(v[0], v[1]))
-		case 1:
-			volumeBindings = append(volumeBindings, model2.NewVolume(v[0]))
+		switch {
+		case volume.HostPath == "":
+			volumeBindings = append(volumeBindings, domainModel.NewVolume(volume.ContainerPath))
+		default:
+			if volume.NeedCopy {
+				volumeBindings = append(volumeBindings, domainModel.NewVolumeBindingCopy(volume.HostPath, volume.ContainerPath))
+			} else {
+				volumeBindings = append(volumeBindings, domainModel.NewVolumeBinding(volume.HostPath, volume.ContainerPath))
+			}
 		}
 	}
 	for _, healthCheck := range svc.HealthChecks {
 		switch healthCheck.Type {
-		case string(model2.HealthCheckHTTP):
-			hc := model2.NewHealthCheckHTTP(healthCheck.Port, healthCheck.Endpoint)
+		case string(domainModel.HealthCheckHTTP):
+			hc := domainModel.NewHealthCheckHTTP(healthCheck.Port, healthCheck.Endpoint)
 			healthChecks = append(healthChecks, hc)
-		case string(model2.HealthCheckTCP):
-			hc := model2.NewHealthCheckTCP(healthCheck.Port)
+		case string(domainModel.HealthCheckTCP):
+			hc := domainModel.NewHealthCheckTCP(healthCheck.Port)
 			healthChecks = append(healthChecks, hc)
 		}
 	}
 
-	if svc.FilePath != "" {
-		config := model2.NewCustomServiceConfig(name, svc.DomainName, svc.FilePath, ports)
+	if svc.IsCustom {
+		config := domainModel.NewCustomServiceConfig(name, svc.DomainName, svc.FilePath, ports)
 		return config, nil
 	}
 
-	return model2.NewServiceConfig(
+	return domainModel.NewServiceConfig(
 		name,
 		svc.DomainName,
 		svc.Image,
@@ -113,6 +108,6 @@ func MapExternalToServiceConfig(name string, svc *Service) (model2.ServiceConfig
 		volumeBindings,
 		healthChecks,
 		svc.Networks,
-		model2.ServiceTag(svc.Tag),
+		domainModel.ServiceTag(svc.Tag),
 	), nil
 }

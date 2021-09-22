@@ -13,6 +13,8 @@ type Port interface {
 
 type PortProtocol string
 
+const UnsetPort = -1
+
 var (
 	ProtocolDefault = PortProtocol("")
 	ProtocolTCP     = PortProtocol("tcp")
@@ -26,7 +28,7 @@ type pb struct {
 }
 
 func NewPort(containerPort int) Port {
-	return &pb{hostPort: 0, containerPort: containerPort}
+	return &pb{hostPort: UnsetPort, containerPort: containerPort}
 }
 
 func NewPortBinding(hostPort int, containerPort int) Port {
@@ -62,14 +64,14 @@ func (p *pb) String() string {
 	if p.protocol != "" {
 		protocol += "/" + string(p.protocol)
 	}
-	if p.hostPort == 0 {
+	if p.hostPort == UnsetPort {
 		return fmt.Sprintf("%d%v", p.containerPort, protocol)
 	}
 	return fmt.Sprintf("%d:%d%v", p.hostPort, p.containerPort, protocol)
 }
 
 func (p *pb) IsValid() bool {
-	return (p.hostPort == 0 || (p.hostPort > 0 && p.hostPort < 65536)) &&
-		p.containerPort > 0 && p.containerPort < 65536 &&
+	return (p.hostPort == UnsetPort || (p.hostPort >= 0 && p.hostPort < 65536)) &&
+		p.containerPort >= 0 && p.containerPort < 65536 &&
 		(p.protocol == ProtocolDefault || p.protocol == ProtocolTCP || p.protocol == ProtocolUDP)
 }

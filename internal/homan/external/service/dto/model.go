@@ -3,33 +3,34 @@ package dto
 import "time"
 
 type Service struct {
-	FilePath     string         `yaml:"-" json:"file_path,omitempty"`
-	Build        interface{}    `yaml:"-" json:"-,omitempty"`
-	DomainName   string         `yaml:"-" json:"domain_name,omitempty"`
-	Image        string         `yaml:"image" json:"image,omitempty"`
-	Environment  []string       `yaml:"environment" json:"environment,omitempty"`
-	Ports        []string       `yaml:"ports" json:"ports,omitempty"`
-	Volumes      []string       `yaml:"volumes" json:"volumes,omitempty"`
-	HealthChecks []*HealthCheck `yaml:"-" json:"health_checks,omitempty"`
-	Networks     []string       `yaml:"networks" json:"networks,omitempty"`
-	Tag          string         `yaml:"-" json:"type,omitempty"`
+	FilePath     string         `json:"file_path,omitempty"`
+	DomainName   string         `json:"domain_name,omitempty"`
+	Image        string         `json:"image,omitempty"`
+	Environment  []string       `json:"environment,omitempty"`
+	Ports        []*Port        `json:"ports,omitempty"`
+	Volumes      []*Volume      `json:"volumes,omitempty"`
+	HealthChecks []*HealthCheck `json:"health_checks,omitempty"`
+	Networks     []string       `json:"networks,omitempty"`
+	Tag          string         `json:"type,omitempty"`
+	IsCustom     bool           `json:"is_custom"`
+}
+
+type Port struct {
+	HostPort      int    `json:"host_port"`
+	ContainerPort int    `json:"container_port"`
+	Protocol      string `json:"protocol"`
+}
+
+type Volume struct {
+	HostPath      string `json:"host_path"`
+	ContainerPath string `json:"container_path"`
+	NeedCopy      bool   `json:"need_copy"`
 }
 
 type HealthCheck struct {
 	Type     string `json:"type"`
 	Port     int    `json:"port"`
 	Endpoint string `json:"endpoint"`
-}
-
-type Network struct {
-	Name     string `yaml:"name" json:"name,omitempty"`
-	External bool   `yaml:"external" json:"external,omitempty"`
-}
-
-type DockerCompose struct {
-	Version  string              `yaml:"version"`
-	Services map[string]*Service `yaml:"services"`
-	Networks map[string]*Network `yaml:"networks"`
 }
 
 type RegistryData struct {

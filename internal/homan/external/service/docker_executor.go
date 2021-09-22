@@ -45,13 +45,53 @@ func NewDockerExecutor(
 	}
 }
 
-func (d *dockerExecutor) InitVolume(ctx context.Context, checkHealth bool, configs ...model.ServiceConfig) error {
-	var newServices []model.ServiceConfig
-	defer func() {
-		for _, config := range newServices {
-			_ = d.Stop(ctx, config)
+func (d dockerExecutor) Init(ctx context.Context, configs ...model.ServiceConfig) error {
+	var needCopyConfigs []model.ServiceConfig
+
+	for _, config := range configs {
+		if config == nil {
+			continue
 		}
-	}()
+		for _, volume := range config.VolumeBindings() {
+			if volume.NeedCopy() {
+				needCopyConfigs = append(needCopyConfigs, config)
+				break
+			}
+		}
+	}
+
+	err := d.copyVolume(ctx, needCopyConfigs...)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *dockerExecutor) copyVolume(ctx context.Context, configs ...model.ServiceConfig) (err error) {
+	stopped := false
+	var newServices []model.ServiceConfig
+	shutdown := func() {
+		if stopped {
+			return
+		}
+		stopped = true
+		for _, config := range newServices {
+			err2 := d.Stop(ctx, config)
+			if err2 != nil {
+				if err == nil {
+					err = err2
+				}
+			}
+			err2 = d.wait(ctx, config, false, 60, false)
+			if err2 != nil {
+				if err == nil {
+					err = err2
+				}
+			}
+		}
+	}
+
+	defer shutdown()
 
 	for _, config := range configs {
 		if config == nil {
@@ -78,7 +118,7 @@ func (d *dockerExecutor) InitVolume(ctx context.Context, checkHealth bool, confi
 			return err
 		}
 
-		err = d.wait(ctx, 60, newService, checkHealth)
+		err = d.wait(ctx, newService, true, 60, false)
 		if err != nil {
 			return err
 		}
@@ -86,6 +126,10 @@ func (d *dockerExecutor) InitVolume(ctx context.Context, checkHealth bool, confi
 		newServices = append(newServices, newService)
 
 		for _, volume := range config.VolumeBindings() {
+			if !volume.NeedCopy() {
+				continue
+			}
+
 			err := d.storage.Mkdir(volume.HostPath())
 			if err != nil {
 				return err
@@ -103,6 +147,7 @@ func (d *dockerExecutor) InitVolume(ctx context.Context, checkHealth bool, confi
 			}
 		}
 	}
+	shutdown()
 	return nil
 }
 
@@ -186,7 +231,7 @@ func (d *dockerExecutor) RunWait(ctx context.Context, timeout int, configs ...mo
 		if config == nil {
 			continue
 		}
-		err := d.wait(ctx, timeout, config, true)
+		err := d.wait(ctx, config, true, timeout, true)
 		if err != nil {
 			_ = d.Stop(ctx, configs...)
 			return err
@@ -195,11 +240,13 @@ func (d *dockerExecutor) RunWait(ctx context.Context, timeout int, configs ...mo
 	return nil
 }
 
-func (d *dockerExecutor) wait(ctx context.Context, timeout int, config model.ServiceConfig, checkHealth bool) error {
+func (d *dockerExecutor) wait(
+	ctx context.Context, config model.ServiceConfig, expectRunning bool, timeout int, checkHealth bool,
+) error {
 	isRunning, err := d.IsRunning(ctx, config, checkHealth)
 	timeoutPerIter := 1000 // in ms
 	retry := timeout * 1000 / timeoutPerIter
-	for retry > 0 && (err == nil && !isRunning) {
+	for retry > 0 && (err == nil && isRunning != expectRunning) {
 		time.Sleep(time.Duration(timeoutPerIter) * time.Millisecond)
 		isRunning, err = d.IsRunning(ctx, config, checkHealth)
 		retry--
@@ -207,8 +254,8 @@ func (d *dockerExecutor) wait(ctx context.Context, timeout int, config model.Ser
 	if err != nil {
 		return err
 	}
-	if !isRunning {
-		return errors.New(config.Name() + " is not running")
+	if isRunning != expectRunning {
+		return errors.New(fmt.Sprintf("waiting of %v is reaching timeout", config.Name()))
 	}
 	return nil
 }
